@@ -14,10 +14,10 @@
 #include <time.h>
 #include <netinet/tcp.h>
 #include <wiringPi.h>
-#include "wiringpi-serial.h"
-#include "easylogging++.h"
-#include "ringbuffer.h"
-#include "parallel-gpio.h"
+#include "../common/wiringpi-serial.h"
+#include "../common/easylogging++.h"
+#include "../common/ringbuffer.h"
+#include "../common/parallel-gpio.h"
 
 #define BUFFER_SIZE 2040
 #define SOCKET_SERVER_PORT 8888
