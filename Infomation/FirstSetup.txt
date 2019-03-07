@@ -1,0 +1,103 @@
+Change keyboard layout: https://www.raspberrypi.org/forums/viewtopic.php?t=9136#p106790
+
+Use the command:
+	sudo dpkg-reconfigure keyboard-configuration
+to reconfigure your keyboard. Choose English (US) for keyboard layout (second page of configuration). Then either reboot or
+	invoke-rc.d keyboard-setup start
+to reload the keymap.
+
+Connect to wifi:
+
+Soft-blocking
+The output to sudo rfkill list shows that your network card is "soft-blocked".
+
+This could happen when the wireless card has been signalled to switch-off via the kernel.
+
+Try the following steps:
+run in a terminal:
+sudo rfkill unblock wifi; sudo rfkill unblock all
+rerun sudo rfkill list to confirm that the card has been unblocked.
+reboot
+rerun sudo rfkill list again to confirm unblocking as been retained.
+rerun sudo lshw -class network - you should now see that the kernel has recognised (or not) the wireless card.
+
+If the wireless kernel module has been recognised (it should not say "unclaimed"), Network Manager should now be able to see wireless networks that are available in your vacinity.
+https://www.raspberrypi.org/documentation/configuration/wireless/wireless-cli.md
+
+sudo su
+wpa_passphrase "ShihChiangDesktop" "liushihchiang" >> /etc/wpa_supplicant/wpa_supplicant.conf
+wpa_passphrase "NUS_2-4GHz" "password" >> /etc/wpa_supplicant/wpa_supplicant.conf
+
+sudo apt-get update
+sudo apt-get dist-upgrade
+
+Remove autologin:
+sudo ln -fs /etc/systemd/system/autologin@.service /etc/systemd/system/getty.target.wants/getty@tty1.service
+
+Install programs:
+sudo apt-get install wiringpi
+sudo apt-get install vim
+sudo apt-get install git
+sudo apt-get install bc
+
+Enable SSH:
+sudo raspi-config
+
+Configure RPi to Access Point mode:
+https://github.com/SurferTim/documentation/blob/6bc583965254fa292a470990c40b145f553f6b34/configuration/wireless/access-point.md
+	*TAKE NOTE*: REMOVE driver=nl80211 from /etc/hostapd/hostapd.conf
+
+
+Remove disk checking feature (speed up boot up time): https://www.raspberrypi.org/forums/viewtopic.php?t=61821&p=459652
+	Edit your /etc/fstab and set any file systems you don't want checked to have a 0 in the 6th (last) field.
+
+Configure UART:
+https://raspberrypi.stackexchange.com/questions/45570/how-do-i-make-serial-work-on-the-raspberry-pi3/45571#45571
+
+
+Compiling MAX3107 driver: https://gist.github.com/fenrir-naru/95669cb8fcbf14c22e59#file-gistfile1-sh-l12
+https://github.com/notro/rpi-source/wiki/Examples-on-how-to-build-various-modules#hello-world-example
+
+Install rpi-source:
+https://github.com/notro/rpi-source/wiki
+
+Get max310x.c from: https://github.com/torvalds/linux/blob/master/drivers/tty/serial/max310x.c
+
+Write a makefile:
+MODSRC=/home/pi/max310x
+obj-m+=max310x.o
+
+all:
+	make -C /lib/modules/$(shell uname -r)/build M=${MODSRC} modules
+
+clean:
+	make -C /lib/modules/$(shell uname -r)/build M=${MODSRC} clean
+
+To configure Raspberry pi to have Static IP Address:
+Edit /etc/dhcpcd.conf: Add the following lines to the end of the file:
+
+interface wlan0
+static ip_address=192.168.137.74/24
+static routers=192.168.137.1
+static domain_name_servers=192.168.137.1
+
+Disable BT:
+https://scribles.net/disabling-bluetooth-on-raspberry-pi/
+Disabling on-board Bluetooth
+The steps below shows how to disable on-board Bluetooth and related services. Those steps also disable loading the related kernel modules such as bluetooth, hci_uart, btbcm, etc at boot.
+
+1. Open /boot/config.txt file.
+	sudo nano /boot/config.txt
+2. Add below, save and close the file.
+	# Disable Bluetooth
+	dtoverlay=pi3-disable-bt
+
+3. Disable related services.
+	sudo systemctl disable hciuart.service
+	sudo systemctl disable bluealsa.service
+	sudo systemctl disable bluetooth.service
+4. Reboot to apply the changes
+	sudo reboot
+Even after disabling on-board Bluetooth and related services, Bluetooth will be available when a Bluetooth adapter is plugged in.
+
+Note: change the arm_freq to 1400, arm_freq_min=100, and temp_soft_limit=70 in /boot/config.txt
