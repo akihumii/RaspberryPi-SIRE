@@ -100,3 +100,4 @@ Type the following command to activate the service
 
 For pinout, please refer to this:
 ![](https://user-images.githubusercontent.com/19749458/53934296-491b8080-40dd-11e9-8190-aee72b1c48c3.png)
+![](https://user-images.githubusercontent.com/19749458/54015754-a259e180-41bb-11e9-8cb3-67e74a2ea640.png)
