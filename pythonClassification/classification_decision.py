@@ -1,13 +1,14 @@
 from config_serial import ConfigSerial
 from config_GPIO import ConfigGPIO
+from tcpip import TcpIp
 
 
-class ClassificationDecision(ConfigGPIO, ConfigSerial):
-    def __init__(self, method, pin_led, mode):
+class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
+    def __init__(self, method, pin_led, mode, ip_add, port):
         ConfigGPIO.__init__(self, pin_led, mode)
         ConfigSerial.__init__(self, mode)
+        TcpIp.__init__(self, ip_add, port, buffer_size=None)
         self.method = method
-        self.pin_led = pin_led
         self.result = 0
 
     def output(self, channel_index, state, value):

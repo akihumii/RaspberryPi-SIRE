@@ -39,6 +39,19 @@ class TcpIp:
 
         return np.append(buffer_leftover, buffer_read)
 
+    def send(self, msg):
+        total_sent = 0
+        while total_sent < len(msg):
+            sent = self.socket_obj.send(msg[total_sent:])
+            if sent == 0:
+                raise RuntimeError("Socket connection broken...")
+            total_sent = total_sent + sent
+
+    def clear_buffer(self):
+        packet = self.socket_obj.recv(self.buffer_size)
+        while packet:
+            packet = self.socket_obj.recv(self.buffer_size)
+
     def write_disconnect(self):
         msg = 'DISCONNECT!!!!!!'  # 16 char
         try:

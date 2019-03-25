@@ -8,8 +8,11 @@ from config_GPIO import ConfigGPIO
 
 IP_SYLPH = "127.0.0.1"
 IP_ODIN = "192.168.4.1"
+IP_STIMULATOR = ""
 PORT_SYLPH = 8888
 PORT_ODIN = 30000
+PORT_STIMULATOR = 0
+
 BUFFER_SIZE = 25 * 65  # about 50 ms
 RINGBUFFER_SIZE = 40960
 CHANNEL_LEN = 10
@@ -18,6 +21,7 @@ PIN_LED = [[18, 4],
            [17, 27],
            [22, 5],
            [6, 13]]
+
 FEATURES_ID = [5, 7]
 PIN_OFF = 24
 METHOD = 'GPIO'  # METHOD for output display
@@ -54,14 +58,19 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(FEATURES_ID, METHOD, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(FEATURES_ID, METHOD, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
 
-            thread_process_classification.start()  # start thread 2
+            thread_process_classification.start()  # start thread 2: online classification
 
+            # run classification when classification GPIO is on
             buffer_leftover = []
+
+            # clear socket buffer
+            tcp_ip_sylph.clear_buffer()
+
             while process_obj.input_GPIO():
-                buffer_read = tcp_ip_sylph.read(buffer_leftover)
-                buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)
+                buffer_read = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
+                buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)  # get buffer into data
                 if not empty_buffer_flag:
                     data_obj.get_data_channel()  # demultiplex and get the channel data
                     # print(data_obj.data_processed[-1, -1])

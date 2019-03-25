@@ -8,10 +8,10 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision):
-    def __init__(self, features_id,  method, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
+    def __init__(self, features_id,  method, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
         multiprocessing.Process.__init__(self)
         Saving.__init__(self)
-        ClassificationDecision.__init__(self, method, pin_led, 'out')
+        ClassificationDecision.__init__(self, method, pin_led, 'out', ip_add, port)
 
         self.clf = None
         self.window_class = window_class  # seconds
@@ -36,12 +36,13 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
                 print('pause processing...')
                 break
 
-            while not self.ring_queue.empty():
+            while not self.ring_queue.empty():  # loop until ring queue has some thing
                 self.data_raw = self.ring_queue.get()
                 self.save(self.data_raw, "a")
 
+            # start classifying when data in ring queue has enough data
             if np.size(self.data_raw, 0) > (self.window_overlap * self.sampling_freq):
-                self.classify()
+                self.classify()  # do the prediction and the output
 
         self.stop()  # stop GPIO/serial classification display output
 
@@ -59,7 +60,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
             try:
                 prediction = self.clf[i].predict([features]) - 1
                 if prediction != (self.prediction >> i & 1):  # if prediction changes
-                    self.prediction = self.output(i, prediction, self.prediction)
+                    self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
                     print('Prediction: %s' % format(self.prediction, 'b'))
             except ValueError:
                 print('prediction failed...')
