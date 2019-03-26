@@ -27,11 +27,19 @@ class CommandOdin:
         self.pulse_duration = 200 * np.ones(4, dtype=int)
         self.frequency = 50
 
+        self.num_channel = 4
+
         self.amplitude_a = 0.0121
         self.amplitude_b = 12.853
         self.amplitude_c = 6.6892
 
         self.sock = socket
+
+    def send_initialise(self):  # send all parameters except channel enable
+        self.send_frequency()
+        [self.send_pulse_duration(i) for i in range(self.num_channel)]
+        self.get_coefficients()
+        [self.send_amplitude(self._get_amplitude_byte(i)) for i in range(self.num_channel)]
 
     def send_start(self):
         self.sock.send(self.command_start)

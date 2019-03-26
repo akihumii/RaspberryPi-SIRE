@@ -4,10 +4,11 @@ from tcpip import TcpIp
 
 
 class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
-    def __init__(self, method, pin_led, mode, ip_add, port):
+    def __init__(self, method, pin_led, mode, ip_add, port, odin_obj):
         ConfigGPIO.__init__(self, pin_led, mode)
         ConfigSerial.__init__(self, mode)
         TcpIp.__init__(self, ip_add, port, buffer_size=None)
+        self.odin_obj = odin_obj
         self.method = method
         self.result = 0
 
@@ -19,12 +20,17 @@ class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
 
         switcher_output = {
             'GPIO': self.output_GPIO,
-            'serial': self.output_serial
+            'serial': self.output_serial,
+            'command': self.odin_obj.set_and_send_command
         }
 
         switcher_output.get(self.method)(self.result)
 
         return self.result
+
+    def set_and_send_command(self, output):
+        self.odin_obj.channel_enable = output
+        self.odin_obj.send_channel_enable()
 
     def input(self):
         switcher_output = {

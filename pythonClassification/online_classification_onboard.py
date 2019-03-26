@@ -4,6 +4,7 @@ from time import sleep
 from tcpip import TcpIp
 from data_handler import DataHandler
 from process_classification import ProcessClassification
+from command_odin import CommandOdin
 from config_GPIO import ConfigGPIO
 
 IP_SYLPH = "127.0.0.1"
@@ -58,15 +59,15 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(FEATURES_ID, METHOD, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
+            odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
+
+            thread_process_classification = ProcessClassification(odin_obj, FEATURES_ID, METHOD, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
 
             thread_process_classification.start()  # start thread 2: online classification
 
-            # run classification when classification GPIO is on
-            buffer_leftover = []
+            buffer_leftover = []  # run classification when classification GPIO is on
 
-            # clear socket buffer
-            tcp_ip_sylph.clear_buffer()
+            tcp_ip_sylph.clear_buffer()  # clear socket buffer
 
             while process_obj.input_GPIO():
                 buffer_read = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
@@ -77,7 +78,7 @@ if __name__ == "__main__":
                     # data_obj.save(data_obj.data_processed, "a")
                     data_obj.fill_ring_data(ring_queue)  # fill the ring buffer
 
-            ring_event.clear()
+            ring_event.clear()  # stop thread 2
 
             tcp_ip_sylph.write_disconnect()
             # tcp_ip_odin.write_disconnect()  # write 16 char to odin socket
