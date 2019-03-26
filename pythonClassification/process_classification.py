@@ -8,10 +8,10 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision):
-    def __init__(self, features_id,  method, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
+    def __init__(self, thresholds, method_classify, features_id,  method_io, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
         multiprocessing.Process.__init__(self)
         Saving.__init__(self)
-        ClassificationDecision.__init__(self, method, pin_led, 'out', ip_add, port)
+        ClassificationDecision.__init__(self, method_io, pin_led, 'out', ip_add, port)
 
         self.clf = None
         self.window_class = window_class  # seconds
@@ -20,6 +20,14 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
         self.ring_event = ring_event
         self.ring_queue = ring_queue
         self.features_id = features_id
+
+        method_classify_all = {
+            'features': self.classify_features,
+            'thresholds': self.classify_thresholds
+        }
+        self.classify_function = method_classify_all.get(method_classify)
+
+        self.thresholds = thresholds
 
         self.__channel_len = channel_len
 
@@ -55,15 +63,28 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
 
     def classify(self):
         for i, x in enumerate(self.channel_decode):
-            feature_obj = Features(self.data_raw[int(x)-1], self.sampling_freq, self.features_id)
-            features = feature_obj.extract_features()
             try:
-                prediction = self.clf[i].predict([features]) - 1
+                prediction = self.classify_function(i, self.data_raw[int(x) - 1])  # pass in the channel index and data
                 if prediction != (self.prediction >> i & 1):  # if prediction changes
                     self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
                     print('Prediction: %s' % format(self.prediction, 'b'))
             except ValueError:
                 print('prediction failed...')
+
+    def classify_features(self, channel_i, data):
+        features = self.extract_features(data)
+        prediction = self.clf[channel_i].predict([features]) - 1
+        return prediction
+
+    def classify_thresholds(self, channel_i, data):
+        prediction = data >= self.thresholds[channel_i]
+        return prediction
+
+    def extract_features(self, data):
+        feature_obj = Features(data, self.sampling_freq, self.features_id)
+        features = feature_obj.extract_features()
+        return features
+
 
 
 
