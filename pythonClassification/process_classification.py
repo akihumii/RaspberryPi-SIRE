@@ -8,10 +8,10 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision):
-    def __init__(self, features_id,  method, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
+    def __init__(self, method_saving, thresholds, method_classify, features_id,  method_io, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
         multiprocessing.Process.__init__(self)
-        Saving.__init__(self)
-        ClassificationDecision.__init__(self, method, pin_led, 'out', ip_add, port)
+        Saving.__init__(self, method=method_saving)
+        ClassificationDecision.__init__(self, method_io, pin_led, 'out', ip_add, port)
 
         self.clf = None
         self.window_class = window_class  # seconds

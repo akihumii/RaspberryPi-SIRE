@@ -24,7 +24,10 @@ PIN_LED = [[18, 4],
 
 FEATURES_ID = [5, 7]
 PIN_OFF = 24
-METHOD = 'GPIO'  # METHOD for output display
+METHOD_IO = 'GPIO'  # METHOD for output display
+METHOD_CLASSIFY = 'features'
+METHOD_SAVING = 'Training'  # either Training or Data
+THRESHOLDS = [0, 0, 0, 0]
 
 WINDOW_CLASS = 0.2  # second
 WINDOW_OVERLAP = 0.05  # second
@@ -58,7 +61,7 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(FEATURES_ID, METHOD, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(METHOD_SAVING, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
 
             thread_process_classification.start()  # start thread 2: online classification
 
