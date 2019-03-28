@@ -5,6 +5,7 @@ from tcpip import TcpIp
 from data_handler import DataHandler
 from process_classification import ProcessClassification
 from config_GPIO import ConfigGPIO
+import training
 
 IP_SYLPH = "127.0.0.1"
 IP_ODIN = "192.168.4.1"
@@ -40,10 +41,14 @@ NOTCH_THRESH = 50
 if __name__ == "__main__":
     process_obj = ConfigGPIO(PIN_OFF, 'in')
     process_obj.setup_GPIO()
+    flag_training = False
 
     count = 1
     count2 = 1
     while True:
+        if flag_training:
+
+
         if process_obj.input_GPIO():
             # globals.initialize()  # initialize global variable ring data
 

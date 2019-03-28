@@ -1,9 +1,35 @@
 import numpy as np
 import pickle
 from sklearn.svm import SVC
+import burst_detection
 from sklearn import preprocessing
 import os
 import sys
+
+
+class Training():
+    def __init__(self, sampling_freq, point_start, point_end):
+        self.data_location = os.path.join("Data", "Training")
+
+        self.sampling_freq = sampling_freq
+        self.point_start = point_start
+        self.point_end = point_end
+
+        self.data = []
+        self.data_TKEO = []
+
+        self.burst_loc_start = []
+
+    def load_data(self):
+        self.data = [np.genfromtxt(os.path.join(self.data_location, x), delimiter=',', defaultfmt='%f')
+                     for x in os.listdir(self.data_location)]
+
+    def convert_TKEO(self, data):
+        self.data_TKEO = [burst_detection.convert_TKEO(x, self.sampling_freq) for x in data]
+
+    def detect_burst(self, data):
+
+
 
 
 def train(target_dir):

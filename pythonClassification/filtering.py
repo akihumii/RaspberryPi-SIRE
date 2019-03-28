@@ -2,7 +2,7 @@ from scipy import signal
 
 
 class Filtering:
-    def __init__(self, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
+    def __init__(self, sampling_freq, hp_thresh, lp_thresh, notch_thresh, persistent_memory=True):
         self.data_filtered = []
         self.sampling_freq = sampling_freq
 
@@ -23,6 +23,7 @@ class Filtering:
         self.high_pass_threshold = hp_thresh / self.nyq
         self.low_pass_threshold = lp_thresh / self.nyq
 
+        self.persistent_memory = persistent_memory
         self.set_filter()
 
     def set_filter(self):
@@ -54,8 +55,11 @@ class Filtering:
         #     self.data_filtered[i], self.filter_z = signal.lfilter(self.filter_obj, 1, [x], zi=self.filter_z)
 
         if self.filter_flag:
-            self.data_filtered, self.filter_z = signal.lfilter(self.filter_b, self.filter_a, data_buffer_all,
-                                                               zi=self.filter_z)
+            if self.persistent_memory:
+                self.data_filtered, self.filter_z = signal.lfilter(self.filter_b, self.filter_a, data_buffer_all,
+                                                                   zi=self.filter_z)
+            else:
+                self.data_filtered = signal.lfilter(self.filter_b, self.filter_a, data_buffer_all)
 
             return self.data_filtered
         else:
