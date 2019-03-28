@@ -27,7 +27,11 @@ class Training():
     def convert_TKEO(self, data):
         self.data_TKEO = [burst_detection.convert_TKEO(x, self.sampling_freq) for x in data]
 
-    def detect_burst(self, data):
+    def detect_burst(self, multiplier):
+        result_threshold = burst_detection.moving_window_threhsolding(self.data_TKEO[0])  # first file is baseline
+        baseline_std = result_threshold.get('baseline_std')
+        threhosld = multiplier * baseline_std
+
 
 
 
