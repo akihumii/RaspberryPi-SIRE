@@ -20,8 +20,8 @@ class CommandOdin:
             'threshold_enable':     0xFE,
         }
 
-        self.command_start = [0xF8, 0xF8]
-        self.command_stop = [0x8F, 0x8F]
+        self.command_start = self._convert_to_char([0xF8, 0xF8])
+        self.command_stop = self._convert_to_char([0x8F, 0x8F])
 
         self.amplitude = 1 * np.ones(4, dtype=np.double)
         self.channel_enable = 0
@@ -40,12 +40,13 @@ class CommandOdin:
         self.get_coefficients()
         time.sleep(0.8)
         self.send_frequency()
+        time.sleep(0.2)
         for i in range(self.num_channel):
-            time.sleep(1 + i*0.2)
             self.send_pulse_duration(self._get_pulse_duration_byte(i))
+            time.sleep(0.2)
         for i in range(self.num_channel):
-            time.sleep(1.8 + i*0.2)
             self.send_amplitude(self._get_amplitude_byte(i))
+            time.sleep(0.2)
 
     def send_start(self):
         self.sock.send(self.command_start)
@@ -59,19 +60,19 @@ class CommandOdin:
         if amplitude > 240:  # set a upper limit
             amplitude = 240
 
-        self.sock.send([address, amplitude])
+        self.sock.send(self._convert_to_char([address, amplitude]))
 
     def send_pulse_duration(self, channel):
         address = self.address.get('pulse_duration_ch%d' % channel+1)
-        self.sock.send([address, self.pulse_duration[channel]])
+        self.sock.send(self._convert_to_char([address, self.pulse_duration[channel]]))
 
     def send_frequency(self):
         address = self.address.get('frequency')
-        self.sock.send([address, self.frequency])
+        self.sock.send(self._convert_to_char([address, self.frequency]))
 
     def send_channel_enable(self):
         address = self.address.get('channel_enable')
-        self.sock.send([address, self.channel_enable])
+        self.sock.send(self._convert_to_char([address, self.channel_enable]))
 
     def get_coefficients(self):
         coefficients = np.genfromtxt('formula.txt', delimiter=',', defaultfmt='%f')
@@ -86,6 +87,11 @@ class CommandOdin:
     def _get_amplitude_byte(self, channel):
         output = self.amplitude[channel]**2*self.amplitude_a + self.amplitude[channel]*self.amplitude_b - self.amplitude_c  # the conversion into bytes
         output = int(output)
+        return output
+
+    def _convert_to_char(self, data):
+        output = [chr(x) for x in data]
+        output = ''.join(output)
         return output
 
 
