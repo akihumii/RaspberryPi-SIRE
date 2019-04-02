@@ -65,12 +65,12 @@ def convert_TKEO(data, sampling_freq):
     return data_TKEO
 
 
-def trigger(data, threshold, min_distance=0, point_start=0, point_end=0, multiple_peak=True):
+def trigger(data, threshold, min_distance=0, point_start=0, multiple_peak=True):
     len_data = len(data)
     peaks = np.array([])
     locs = np.array([])
     for i in range(len_data-point_start):
-        if data[i: i+point_start-1] > threshold:
+        if all(data[i: i+point_start-1] > threshold):
             peaks = np.append(peaks, data[i])
             locs = np.append(locs, i)
             break
@@ -82,9 +82,73 @@ def trigger(data, threshold, min_distance=0, point_start=0, point_end=0, multipl
         if i < len_data:
             for i in range(1, len_data-point_start):
                 distance = i - peaks[-1]
-                if data[i: i+point_start-1] > threshold and distance > min_distance:
+                if all(data[i: i+point_start-1] > threshold) and distance > min_distance:
                     peaks = np.append(peaks, data[i])
                     locs = np.append(locs, i)
+
+    return dict(peaks=peaks, locs=locs)
+
+
+def find_trigger_end_point(data, threshold, locs_start, points):  # find end point when a number of points drop below a threshold after a starting point has been triggered
+    peaks = np.array([])
+    locs = np.array([])
+
+    num_locs = len(locs_start)
+    len_data = len(data)
+    for i in range(num_locs):  # loop through all the starting points
+        for j in range(locs_start[i], len_data-points):  # check until the end of data
+            data_temp = data[j: j+points]
+            if all(data_temp < threshold):
+                peaks = np.append(peaks, data[j])
+                locs = np.append(locs, j)
+                break
+
+    return dict(peaks=peaks, locs=locs)
+
+
+def edit_burst_length(data_len, burst_len, locs_starting_point):
+    locs_end_point = locs_starting_point + burst_len
+    deleting_i = np.where(locs_end_point > data_len)
+    locs_end_point = np.delete(locs_end_point, deleting_i)
+    locs_starting_point = np.delete(locs_starting_point, deleting_i)
+
+    return [locs_starting_point, locs_end_point]
+
+
+def merge_channel_burst(locs_starting_point, locs_end_point):
+    locs_starting_point_all = np.concatenate(locs_starting_point)
+    locs_end_point_all = np.concatenate(locs_end_point)
+    locs_all = np.vstack((locs_starting_point_all, locs_end_point_all))
+
+    sorting_i = np.argsort(locs_all[0, :])  # sort the locations according to starting points
+    locs_all = locs_all[:, sorting_i]
+
+    target_i = np.diff(locs_all[1, :]) > 0  # omit the bursts that are included in the previous bursts
+    target_i = np.append(True, target_i)
+    locs_all = locs_all[target_i]
+
+    # to omit the partially overlapping bursts
+    overlap_bursts = np.vstack((np.append(locs_all[0, :], float("inf")), np.append(0, locs_all[1, :])))
+    target_i = np.diff(overlap_bursts, 1, 1) < 0
+    locs_all = locs_all[:, target_i]
+
+    return [locs_all[0, :], locs_all[1, :]]
+
+
+def trim_extra_burst_locs(locs_start, locs_end):
+    locs_start_new = np.array([])
+
+    if len(locs_start) != len(locs_end):
+        locs_start = np.delete(locs_start, -1)
+
+    locs_end_new = np.unique(locs_end)
+
+    for x in locs_end_new:
+        locs_start_new = np.append(locs_start_new, locs_start[np.argmax(locs_start > x)])
+
+    if len(locs_start_new) != len(locs_end_new):
+        locs_start_new = np.delete(locs_start_new, -1)
+
 
 
 

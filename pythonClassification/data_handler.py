@@ -63,7 +63,7 @@ class DataHandler(Saving, Filtering):
 
         data_channel = (data_channel.astype(np.float64) - 32768) * 0.000195  # convert to integer
 
-        data_channel = np.transpose(np.vstack([self.filter_obj[x].filter(data_channel[:, x])
+        data_channel = np.transpose(np.vstack([self.filter_obj[x].filter(data_channel[:, x])  # filter data
                                                for x in range(self.__channel_len)]))
 
         self.data_processed = np.hstack([data_channel, data_sync_pulse, data_counter])

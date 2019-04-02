@@ -23,7 +23,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
 
         self.__channel_len = channel_len
 
-        self.data_raw = []
+        self.data = []
         self.channel_decode = []
 
         self.prediction = 0
@@ -37,11 +37,11 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
                 break
 
             while not self.ring_queue.empty():  # loop until ring queue has some thing
-                self.data_raw = self.ring_queue.get()
-                self.save(self.data_raw, "a")
+                self.data = self.ring_queue.get()
+                self.save(self.data, "a")
 
             # start classifying when data in ring queue has enough data
-            if np.size(self.data_raw, 0) > (self.window_overlap * self.sampling_freq):
+            if np.size(self.data, 0) > (self.window_overlap * self.sampling_freq):
                 self.classify()  # do the prediction and the output
 
         self.stop()  # stop GPIO/serial classification display output
@@ -55,7 +55,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
 
     def classify(self):
         for i, x in enumerate(self.channel_decode):
-            feature_obj = Features(self.data_raw[int(x)-1], self.sampling_freq, self.features_id)
+            feature_obj = Features(self.data[int(x)-1], self.sampling_freq, self.features_id)
             features = feature_obj.extract_features()
             try:
                 prediction = self.clf[i].predict([features]) - 1
