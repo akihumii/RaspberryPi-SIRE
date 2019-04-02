@@ -150,6 +150,11 @@ def trim_extra_burst_locs(locs_start, locs_end):
         locs_start_new = np.delete(locs_start_new, -1)
 
 
+def get_bursts_point(data, locs_starting, locs_end):
+    num_locs = len(locs_starting)
+    bursts = [data[locs_starting[i]: locs_end[i], :] for i in range(num_locs)]
+
+    return bursts
 
 
 def visualize_baseline(data1, data2):

@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
 from sklearn.svm import SVC
+from training import train_classifier_SVC
 from sklearn import preprocessing
 import os
 import sys
@@ -27,17 +28,19 @@ def train(target_file):
             # normalize features
             # features_normalized = features_tmp
             # [features_normalized, norms] = preprocessing.normalize(features_tmp, norm='max', axis=0, return_norm=True)
-            norms = np.mean(features_tmp, axis=0)
-            features_normalized = features_tmp / norms
+            # norms = np.mean(features_tmp, axis=0)
+            # features_normalized = features_tmp / norms
             # norms = preprocessing.MinMaxScaler().fit(features_tmp)
             # features_normalized = norms.transform(features_tmp)
 
             print('fitting %s' % file_feature[i])
 
+            classifiers = train_classifier_SVC(features_tmp, class_tmp)
+
             # training SVC
-            gamma_value = 1./(np.size(features_normalized, 1)*features_normalized.std())
-            clf = SVC(kernel='poly', C=50.0, gamma=gamma_value)
-            classifiers = clf.fit(features_normalized, class_tmp)
+            # gamma_value = 1./(np.size(features_normalized, 1)*features_normalized.std())
+            # clf = SVC(kernel='poly', C=50.0, gamma=gamma_value)
+            # classifiers = clf.fit(features_normalized, class_tmp)
 
             # saving classifiers and norms
             filename = 'classifierCh%s.sav' % file_feature[i][file_feature[i].find('Ch')+2]

@@ -5,6 +5,7 @@ from tcpip import TcpIp
 from data_handler import DataHandler
 from process_classification import ProcessClassification
 from config_GPIO import ConfigGPIO
+from training import Training
 import training
 
 IP_SYLPH = "127.0.0.1"
@@ -29,6 +30,7 @@ METHOD_IO = 'GPIO'  # METHOD for output display
 METHOD_CLASSIFY = 'features'
 METHOD_SAVING = 'Training'  # either Training or Data
 THRESHOLDS = [0, 0, 0, 0]
+THRESH_MULTIPLIER = 2.5
 
 WINDOW_CLASS = 0.2  # second
 WINDOW_OVERLAP = 0.05  # second
@@ -37,6 +39,9 @@ SAMPLING_FREQ = 1250  # sample/second
 HP_THRESH = 0
 LP_THRESH = 0
 NOTCH_THRESH = 50
+
+TKEO_POINT_START = 35
+TKEO_POINT_END = 100
 
 if __name__ == "__main__":
     process_obj = ConfigGPIO(PIN_OFF, 'in')
@@ -47,7 +52,7 @@ if __name__ == "__main__":
     count2 = 1
     while True:
         if flag_training:
-
+            Training(SAMPLING_FREQ, TKEO_POINT_START, TKEO_POINT_END, FEATURES_ID, HP_THRESH, LP_THRESH, NOTCH_THRESH, THRESH_MULTIPLIER, WINDOW_CLASS)
 
         if process_obj.input_GPIO():
             # globals.initialize()  # initialize global variable ring data

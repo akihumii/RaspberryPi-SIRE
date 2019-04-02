@@ -7,11 +7,12 @@ from classification_decision import ClassificationDecision
 from features import Features
 
 
-class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision):
+class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision, Features):
     def __init__(self, method_saving, thresholds, method_classify, features_id,  method_io, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
         multiprocessing.Process.__init__(self)
         Saving.__init__(self, method=method_saving)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out', ip_add, port)
+        Features.__init__(sampling_freq, features_id)
 
         self.clf = None
         self.window_class = window_class  # seconds
@@ -55,8 +56,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
 
     def classify(self):
         for i, x in enumerate(self.channel_decode):
-            feature_obj = Features(self.data[int(x)-1], self.sampling_freq, self.features_id)
-            features = feature_obj.extract_features()
+            features = self.extract_features(self.data[int(x)-1])
             try:
                 prediction = self.clf[i].predict([features]) - 1
                 if prediction != (self.prediction >> i & 1):  # if prediction changes

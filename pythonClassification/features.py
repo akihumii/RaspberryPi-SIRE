@@ -2,13 +2,15 @@ import numpy as np
 
 
 class Features:
-    def __init__(self, data, sampling_freq, *args):
-        self.data = data
-        self.data_absolute = np.absolute(data)
+    def __init__(self, sampling_freq, *args):
+        self.data = []
+        self.data_absolute = []
         self.sampling_freq = sampling_freq
         self.run_list = args
 
-    def extract_features(self):
+    def extract_features(self, data):
+        self.data = data
+        self.data_absolute = np.absolute(data)
         output = []
         if not self.run_list:  # if input arg is zero, run all.
             self.run_list = range(1, 9)
