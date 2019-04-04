@@ -52,7 +52,7 @@ if __name__ == "__main__":
     count2 = 1
     while True:
         if flag_training:
-            Training(SAMPLING_FREQ, TKEO_POINT_START, TKEO_POINT_END, FEATURES_ID, HP_THRESH, LP_THRESH, NOTCH_THRESH, THRESH_MULTIPLIER, WINDOW_CLASS)
+            Training(CHANNEL_DECODE, SAMPLING_FREQ, TKEO_POINT_START, TKEO_POINT_END, FEATURES_ID, HP_THRESH, LP_THRESH, NOTCH_THRESH, THRESH_MULTIPLIER, WINDOW_CLASS)
 
         if process_obj.input_GPIO():
             # globals.initialize()  # initialize global variable ring data

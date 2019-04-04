@@ -47,19 +47,19 @@ def moving_window_threhsolding(data, lag, threshold, influence):
 
 
 def convert_TKEO(data, sampling_freq):
-    filter_obj = Filtering(sampling_freq, 10, 500, 0)
+    filter_obj = Filtering(sampling_freq, 10, 500, 0, persistent_memory=False)
     data = filter_obj.filter(data)
 
-    filter_obj = Filtering(sampling_freq, 30, 300, 0)
+    filter_obj = Filtering(sampling_freq, 30, 300, 0, persistent_memory=False)
     data = filter_obj.filter(data)
 
-    [num_row, num_col] = np.shape(data)
+    data_len = len(data)
 
-    data_TKEO = [data[i, n]**2 - data[i+1, n]*data[i-1, n] for n in range(num_col) for i in range(1, num_row-1)]
-    data_TKEO = np.vstack([data_TKEO[0, 0:], data_TKEO, data_TKEO[-1, 0:]])
+    data_TKEO = np.vstack([data[i]**2 - data[i+1]*data[i-1] for i in range(1, data_len-1)])
+    data_TKEO = np.vstack([data_TKEO[0], data_TKEO, data_TKEO[-1]])
     data_TKEO = np.abs(data_TKEO)
 
-    filter_obj = Filtering(sampling_freq, 0, 50, 0)
+    filter_obj = Filtering(sampling_freq, 0, 50, 0, persistent_memory=False)
     data_TKEO = filter_obj.filter(data_TKEO)
 
     return data_TKEO
@@ -67,26 +67,27 @@ def convert_TKEO(data, sampling_freq):
 
 def trigger(data, threshold, min_distance=0, point_start=0, multiple_peak=True):
     len_data = len(data)
-    peaks = np.array([])
+    # peaks = np.array([])
     locs = np.array([])
     for i in range(len_data-point_start):
         if all(data[i: i+point_start-1] > threshold):
-            peaks = np.append(peaks, data[i])
+            # peaks = np.append(peaks, data[i])
             locs = np.append(locs, i)
             break
 
-    if not peaks:
+    if not locs:
         return
 
     if multiple_peak:
         if i < len_data:
             for i in range(1, len_data-point_start):
-                distance = i - peaks[-1]
+                distance = i - locs[-1]
                 if all(data[i: i+point_start-1] > threshold) and distance > min_distance:
-                    peaks = np.append(peaks, data[i])
+                    # peaks = np.append(peaks, data[i])
                     locs = np.append(locs, i)
 
-    return dict(peaks=peaks, locs=locs)
+    return locs
+    # return dict(peaks=peaks, locs=locs)
 
 
 def find_trigger_end_point(data, threshold, locs_start, points):  # find end point when a number of points drop below a threshold after a starting point has been triggered

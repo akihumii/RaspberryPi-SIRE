@@ -9,10 +9,10 @@ class TKEO:
         self.point_end = point_end
 
     def convert_TKEO(self, data):
-        filter_obj = Filtering(self.sampling_freq, 10, 500, 0)
+        filter_obj = Filtering(self.sampling_freq, 10, 500, 0, persistent_memory=False)
         data = filter_obj.filter(data)
 
-        filter_obj = Filtering(self.sampling_freq, 30, 300, 0)
+        filter_obj = Filtering(self.sampling_freq, 30, 300, 0, persistent_memory=False)
         data = filter_obj.filter(data)
 
         [num_row, num_col] = np.shape(data)

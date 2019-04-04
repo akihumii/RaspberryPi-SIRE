@@ -10,7 +10,7 @@ import sys
 
 
 class Training(Features, Filtering):
-    def __init__(self, sampling_freq, point_start, point_end, features_id, hp_thresh, lp_thresh, notch_thresh, thresh_multiplier, fix_window_size=0):
+    def __init__(self, channel_decode, sampling_freq, point_start, point_end, features_id, hp_thresh, lp_thresh, notch_thresh, thresh_multiplier, fix_window_size=0):
         Features.__init__(self, sampling_freq, features_id)
         Filtering.__init__(self, sampling_freq, hp_thresh, lp_thresh, notch_thresh, persistent_memory=False)
 
@@ -23,6 +23,13 @@ class Training(Features, Filtering):
         self.fix_window_size = fix_window_size * self.sampling_freq # in seconds
 
         self.thresh_multiplier = thresh_multiplier
+        self.min_distance = 0.02 * sampling_freq
+
+        self.channel_decode = channel_decode
+
+        self.moving_window_lag = 1250
+        self.moving_window_threshold = 2.5
+        self.moving_window_influence = 0
 
         self.data_raw = []
         self.data_TKEO = []
@@ -49,25 +56,29 @@ class Training(Features, Filtering):
         return classifiers
 
     def load_data(self):
-        self.data_raw = [np.genfromtxt(os.path.join(self.data_location, x), delimiter=',', defaultfmt='%f')
+        self.data_raw = [np.array(np.genfromtxt(os.path.join(self.data_location, x), delimiter=',', defaultfmt='%f'))[:, self.channel_decode]
                          for x in os.listdir(self.data_location)]
 
     def convert_TKEO(self, data):
         for x in data:
-            data_TKEO_temp = [burst_detection.convert_TKEO(x[:, y], self.sampling_freq) for y in range(np.size(x, 1))]
+            data_TKEO_temp = np.hstack([burst_detection.convert_TKEO(x[:, y], self.sampling_freq) for y in range(np.size(x, 1))])
             self.data_TKEO.append(data_TKEO_temp)
+        # self.data_TKEO = [burst_detection.convert_TKEO(x, self.sampling_freq) for x in data]
 
     def detect_burst_loc(self, data_baseline, data, multiplier):
-        baseline_std = [burst_detection.moving_window_threhsolding(x).get('baseline_std') for x in data_baseline]
-        threshold = multiplier * baseline_std  # get the threshold to use in TKEO
+        num_channel = np.size(data_baseline, 1)
+        baseline_std = [burst_detection.moving_window_threhsolding(
+            data_baseline[:, i], self.moving_window_lag, self.moving_window_threshold, self.moving_window_influence).get('baseline_std')
+                        for i in range(num_channel)]
+        threshold = multiplier * np.array(baseline_std)  # get the threshold to use in TKEO
 
         locs_starting_point = [[] for __ in data]  # an array for each data
         locs_end_point = [[] for __ in data]
 
         for i, x in enumerate(data):
-            (data_len, num_channel) = np.shape(x)
-            locs_starting_point_temp = [burst_detection.trigger(x[:, i], threshold[i], point_start=self.point_start).get('locs')
-                                        for i in range(num_channel)]
+            data_len = np.size(x, 0)
+            locs_starting_point_temp = [burst_detection.trigger(x[:, j], threshold[j], point_start=self.point_start, min_distance=self.min_distance)
+                                        for j in range(num_channel)]
             # locs_end_point_temp = [burst_detection.find_trigger_end_point(x[:, i], threshold[i], locs_starting_point_temp[i], self.point_end).get('locs')
             #                        for i in range(num_channel)]
 

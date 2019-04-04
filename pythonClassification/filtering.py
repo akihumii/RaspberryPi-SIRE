@@ -40,14 +40,15 @@ class Filtering:
             filter_thresholds = self.low_pass_threshold
             filter_type = 'lowpass'
         else:
-            filter_thresholds = 0
-            filter_type = 'highpass'
+            # filter_thresholds = 0
+            # filter_type = 'highpass'
             self.filter_flag = False
 
-        [self.filter_b, self.filter_a] = signal.butter(
-            self.__order, filter_thresholds, btype=filter_type)
+        if self.filter_flag:
+            [self.filter_b, self.filter_a] = signal.butter(
+                self.__order, filter_thresholds, btype=filter_type)
 
-        self.filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
+            self.filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
 
     def filter(self, data_buffer_all):
         # self.data_filtered = [[] for __ in range(len(data_buffer_all))]
