@@ -2,8 +2,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 import os
+import classificationTraining
 
-target_dir = 'C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp'
+
+def predict_features(clf, features, classes=None):
+    classes_unique = np.unique(classes)
+    classes_predicted = clf.predict(features)
+    if classes:
+        checking_table = [np.array(classes_predicted[np.where(classes == x)]) == np.array(classes[np.where(classes == x)]) for x in classes_unique]
+        performance = [sum(x)/len(x) for x in checking_table]
+
+        return performance
+
+    else:
+        return classes_predicted
+
+
+
+target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp'
 # target_dir = 'C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized'
 
 file_feature = [f for f in os.listdir(target_dir) if f.startswith('featuresCh')]
@@ -33,12 +49,19 @@ for i in range(len(file_feature)):
     features_normalized = features / norms
     # features_normalized = norms.transform(features)
 
+    # get the testing set
+    training_ratio = 0.7
+    [features_testing, classes_testing] = classificationTraining.get_partial_set(features_normalized, classes, training_ratio, 'testing')
+
+    # classify
+    # prediction = predict_features(features_testing, classes_testing)
+
     plt.figure(i)
     plt.clf()
 
-    plt.scatter(clf.support_vectors_[:, 0], clf.support_vectors_[:, 1], s=80,
-                facecolors='none', zorder=10, edgecolors='k')
-    plt.scatter(features_normalized[:, 0], features_normalized[:, 1], c=classes, zorder=10, cmap=plt.cm.Paired,
+    # plt.scatter(clf.support_vectors_[:, 0], clf.support_vectors_[:, 1], s=80,
+    #             facecolors='none', zorder=10, edgecolors='k')
+    plt.scatter(features_testing[:, 0], features_testing[:, 1], c=classes_testing, zorder=10, cmap=plt.cm.Paired,
                 edgecolors='k')
 
     plt.axis('tight')
@@ -69,5 +92,3 @@ for i in range(len(file_feature)):
     plt.title(label_title)
 
 plt.show()
-
-

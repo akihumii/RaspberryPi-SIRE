@@ -24,6 +24,10 @@ def train(target_file):
             features_tmp = np.genfromtxt(os.path.join(target_dir, file_feature[i]), delimiter=',', defaultfmt='%f')
             class_tmp = np.genfromtxt(os.path.join(target_dir, file_class[i]), delimiter=',', defaultfmt='%f')
 
+            # select training set
+            training_ratio = 0.7
+            [features_tmp, class_tmp] = get_partial_set(features_tmp, class_tmp, training_ratio, 'training')
+
             # normalize features
             # features_normalized = features_tmp
             # [features_normalized, norms] = preprocessing.normalize(features_tmp, norm='max', axis=0, return_norm=True)
@@ -56,7 +60,34 @@ def train(target_file):
     print("done...")
 
 
+def get_partial_set(features, classes, training_ratio, type_switch):
+    type_switch_func = {
+        'training': get_training_locs,
+        'testing': get_testing_locs,
+    }
+
+    num_classes_type = np.unique(classes)
+    target_locs = np.hstack([type_switch_func.get(type_switch)(np.where(classes == x)[0], training_ratio) for i, x in enumerate(num_classes_type)])
+
+    target_features = features[target_locs, :]
+    target_classes = classes[target_locs]
+
+    return [target_features, target_classes]
+
+
+def get_training_locs(classes_each, training_ratio):
+    np.random.shuffle(classes_each)
+    num_item = len(classes_each)
+    return classes_each[0: int(num_item * training_ratio)]
+
+
+def get_testing_locs(classes_each, training_ratio):
+    np.random.shuffle(classes_each)
+    num_item = len(classes_each)
+    return classes_each[int(num_item * training_ratio)+1: num_item-1]
+
+
 if __name__ == "__main__":
-    train('C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp')
+    train('F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp')
     # train('C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized')
     # train(str(sys.argv[1]))
