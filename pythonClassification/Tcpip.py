@@ -48,9 +48,12 @@ class TcpIp:
             total_sent = total_sent + sent
 
     def clear_buffer(self):
-        packet = self.socket_obj.recv(self.buffer_size)
-        while packet:
+        try:
             packet = self.socket_obj.recv(self.buffer_size)
+            while packet:
+                packet = self.socket_obj.recv(self.buffer_size)
+        except socket.timeout:
+            pass
 
     def write_disconnect(self):
         msg = 'DISCONNECT!!!!!!'  # 16 char
