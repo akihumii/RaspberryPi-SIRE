@@ -6,13 +6,12 @@ import os
 import sys
 
 
-def train(target_file):
+def train(target_dir):
     print("started...")
     # cwd = os.getcwd()
     # target_dir = os.path.join(cwd, 'classificationTmp')
-    target_dir = target_file
 
-    print("processing the folder %s " % target_file)
+    print("processing the folder %s " % target_dir)
 
     if os.path.exists(target_dir):
         file_feature = [f for f in os.listdir(target_dir) if f.startswith('featuresCh')]
@@ -67,7 +66,9 @@ def get_partial_set(features, classes, training_ratio, type_switch):
     }
 
     num_classes_type = np.unique(classes)
-    target_locs = np.hstack([type_switch_func.get(type_switch)(np.where(classes == x)[0], training_ratio) for i, x in enumerate(num_classes_type)])
+    num_bursts = [len(np.where(classes == x)[0]) for x in num_classes_type]
+    num_bursts_min = min(num_bursts)
+    target_locs = np.hstack([type_switch_func.get(type_switch)(np.where(classes == x)[0], training_ratio, num_bursts_min) for i, x in enumerate(num_classes_type)])
 
     target_features = features[target_locs, :]
     target_classes = classes[target_locs]
@@ -75,16 +76,16 @@ def get_partial_set(features, classes, training_ratio, type_switch):
     return [target_features, target_classes]
 
 
-def get_training_locs(classes_each, training_ratio):
+def get_training_locs(classes_each, training_ratio, num_bursts_min):
     np.random.shuffle(classes_each)
-    num_item = len(classes_each)
-    return classes_each[0: int(num_item * training_ratio)]
+    # num_item = len(classes_each)
+    return classes_each[0: int(num_bursts_min * training_ratio)]
 
 
-def get_testing_locs(classes_each, training_ratio):
+def get_testing_locs(classes_each, training_ratio, num_bursts_min):
     np.random.shuffle(classes_each)
-    num_item = len(classes_each)
-    return classes_each[int(num_item * training_ratio)+1: num_item-1]
+    # num_item = len(classes_each)
+    return classes_each[int(num_bursts_min * training_ratio)+1: num_bursts_min-1]
 
 
 if __name__ == "__main__":
