@@ -29,33 +29,33 @@ int ParallelGPIO::Init(){
 	pinMode(BIT1, INPUT);
 	pinMode(BIT0, INPUT);
 	digitalWrite(RESET, HIGH);			// Release Reset for FPGA Module
-//	fp = new FILE();
-//	if(NULL == (fp = fopen("data.txt", "w"))){
-//		printf("Could not open data.txt\n");
-//	}
+	// fp = new FILE();
+	// if(NULL == (fp = fopen("data.txt", "w"))){
+	// 	printf("Could not open data.txt\n");
+	// }
 	return 0;
 }
 
 unsigned char ParallelGPIO::readByte(void){
 	while(!digitalRead(DATA_RDY)){};
 	unsigned char byte = (unsigned char) digitalRead(BIT7) << 7 | 
-	(unsigned char) digitalRead(BIT6) << 6 | 
-	(unsigned char) digitalRead(BIT5) << 5 | 
-	(unsigned char) digitalRead(BIT4) << 4 | 
-	(unsigned char) digitalRead(BIT3) << 3 | 
-	(unsigned char) digitalRead(BIT2) << 2 | 
-	(unsigned char) digitalRead(BIT1) << 1 | 
-	(unsigned char) digitalRead(BIT0);
+						(unsigned char) digitalRead(BIT6) << 6 | 
+						(unsigned char) digitalRead(BIT5) << 5 | 
+						(unsigned char) digitalRead(BIT4) << 4 | 
+						(unsigned char) digitalRead(BIT3) << 3 | 
+						(unsigned char) digitalRead(BIT2) << 2 | 
+						(unsigned char) digitalRead(BIT1) << 1 | 
+						(unsigned char) digitalRead(BIT0);
 	if(mode == BITMODE_5){
 		byte &= 0B00011111;
 	}
-//	usleep(1);
+	// usleep(1);
 	digitalWrite(CTS, LOW);
-//	usleep(1);
+	// usleep(1);
 	while(digitalRead(DATA_RDY)){};
-//	usleep(1);
+	// usleep(1);
 	digitalWrite(CTS, HIGH);
-//	fprintf(fp, "%d\n", byte);
+	// fprintf(fp, "%d\n", byte);
 	return byte;
 }
 
