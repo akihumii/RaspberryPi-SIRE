@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import bitwise_operation
 
 
 class CommandOdin:
@@ -23,7 +24,9 @@ class CommandOdin:
         self.command_start = self._convert_to_char([0xF8, 0xF8])
         self.command_stop = self._convert_to_char([0x8F, 0x8F])
 
-        self.amplitude = 1 * np.ones(4, dtype=np.double)
+        self.amplitude_default = 5 * np.ones(4, dtype=np.double)
+
+        self.amplitude = self.amplitude_default
         self.channel_enable = 0
         self.pulse_duration = 200 * np.ones(4, dtype=int)
         self.frequency = 50
@@ -36,17 +39,28 @@ class CommandOdin:
 
         self.sock = socket
 
-    def send_initialise(self):  # send all parameters except channel enable
+    def send_start_sequence(self):  # send all parameters except channel enable
+        self.send_start()
         self.get_coefficients()
-        time.sleep(0.8)
+        self.amplitude = self.amplitude_default
+        time.sleep(1)
+        for i in range(self.num_channel):
+            self.send_pulse_duration(i)
+            time.sleep(0.04)
+        for i in range(self.num_channel):
+            self.send_amplitude(i)
+            time.sleep(0.04)
         self.send_frequency()
+
+    def send_stop_sequence(self):  # send stop sequence
+        self.channel_enable = 0
+        self.amplitude = np.zeros(4, dtype=np.double)
+        for i in range(self.num_channel):
+            self.send_amplitude(i)
+            time.sleep(0.04)
+        self.send_channel_enable()
         time.sleep(0.2)
-        for i in range(self.num_channel):
-            self.send_pulse_duration(self._get_pulse_duration_byte(i))
-            time.sleep(0.2)
-        for i in range(self.num_channel):
-            self.send_amplitude(self._get_amplitude_byte(i))
-            time.sleep(0.2)
+        self.send_stop()
 
     def send_start(self):
         self.sock.send(self.command_start)
@@ -55,7 +69,7 @@ class CommandOdin:
         self.sock.send(self.command_stop)
 
     def send_amplitude(self, channel):
-        address = self.address.get('amplitude_ch%d' % channel+1)
+        address = self.address.get('amplitude_ch%d' % int(channel+1))
         amplitude = self._get_amplitude_byte(channel)
         if amplitude > 240:  # set a upper limit
             amplitude = 240
@@ -63,8 +77,8 @@ class CommandOdin:
         self.sock.send(self._convert_to_char([address, amplitude]))
 
     def send_pulse_duration(self, channel):
-        address = self.address.get('pulse_duration_ch%d' % channel+1)
-        self.sock.send(self._convert_to_char([address, self.pulse_duration[channel]]))
+        address = self.address.get('pulse_duration_ch%d' % int(channel+1))
+        self.sock.send(self._convert_to_char([address, self._get_pulse_duration_byte([channel])]))
 
     def send_frequency(self):
         address = self.address.get('frequency')
@@ -85,8 +99,11 @@ class CommandOdin:
         return output
 
     def _get_amplitude_byte(self, channel):
-        output = self.amplitude[channel]**2*self.amplitude_a + self.amplitude[channel]*self.amplitude_b - self.amplitude_c  # the conversion into bytes
-        output = int(output)
+        if self.amplitude[channel] == 0:
+            output = int(0)
+        else:
+            output = self.amplitude[channel]**2*self.amplitude_a + self.amplitude[channel]*self.amplitude_b - self.amplitude_c  # the conversion into bytes
+            output = int(output)
         return output
 
     def _convert_to_char(self, data):

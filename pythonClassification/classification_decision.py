@@ -1,6 +1,7 @@
 from config_serial import ConfigSerial
 from config_GPIO import ConfigGPIO
 from tcpip import TcpIp
+import bitwise_operation
 
 
 class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
@@ -14,9 +15,9 @@ class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
 
     def output(self, channel_index, state, value):
         if state:
-            self.result = self.set_bit(value, channel_index)
+            self.result = bitwise_operation.set_bit(value, channel_index)
         else:
-            self.result = self.clear_bit(value, channel_index)
+            self.result = bitwise_operation.clear_bit(value, channel_index)
 
         switcher_output = {
             'GPIO': self.output_GPIO,
@@ -56,11 +57,6 @@ class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
 
         switcher_output.get(self.method)()
 
-    def set_bit(self, value, index):
-        return value | 1 << index
-
-    def clear_bit(self, value, index):
-        return value & ~(1 << index)
 
 
 

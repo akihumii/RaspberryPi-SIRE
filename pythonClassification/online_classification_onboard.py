@@ -52,14 +52,13 @@ if __name__ == "__main__":
             ring_queue = multiprocessing.Queue()  # saved data across threads
 
             tcp_ip_sylph = TcpIp(IP_SYLPH, PORT_SYLPH, BUFFER_SIZE)  # create sylph socket object
-            tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, BUFFER_SIZE)  # create odin socket object
-
             tcp_ip_sylph.connect()
+
+            tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, BUFFER_SIZE)  # create odin socket object
             tcp_ip_odin.connect()
+            odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
-
-            odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
 
             thread_process_classification = ProcessClassification(odin_obj, FEATURES_ID, METHOD, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
 
