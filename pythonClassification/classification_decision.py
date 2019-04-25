@@ -1,8 +1,10 @@
+from numba.decorators import jit
 from config_serial import ConfigSerial
 from config_GPIO import ConfigGPIO
 from tcpip import TcpIp
 
 
+@jit
 class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
     def __init__(self, method, pin_led, mode, ip_add, port):
         ConfigGPIO.__init__(self, pin_led, mode)

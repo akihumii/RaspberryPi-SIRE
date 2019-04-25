@@ -1,3 +1,4 @@
+from numba.decorators import jit
 import socket
 import random
 import string
@@ -8,6 +9,7 @@ host = "127.0.0.2"
 port = 8000
 
 
+@jit
 class ClientSend(Thread):
     def __init__(self, ip_add, port):
         Thread.__init__(self)

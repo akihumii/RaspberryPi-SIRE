@@ -1,6 +1,8 @@
+from numba.decorators import jit
 import numpy as np
 
 
+@jit
 class Features:
     def __init__(self, data, sampling_freq, *args):
         self.data = data

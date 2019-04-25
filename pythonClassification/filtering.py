@@ -1,6 +1,8 @@
+from numba.decorators import jit
 from scipy import signal
 
 
+@jit
 class Filtering:
     def __init__(self, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
         self.data_filtered = []

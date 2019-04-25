@@ -1,3 +1,4 @@
+from numba.decorators import jit
 import multiprocessing
 import os
 import numpy as np
@@ -7,6 +8,7 @@ from classification_decision import ClassificationDecision
 from features import Features
 
 
+@jit
 class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision):
     def __init__(self, features_id,  method, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
         multiprocessing.Process.__init__(self)

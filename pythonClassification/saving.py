@@ -1,8 +1,10 @@
+from numba.decorators import jit
 import os
 import datetime
 import numpy as np
 
 
+@jit
 class Saving:  # save the data
     def __init__(self):
         now = datetime.datetime.now()

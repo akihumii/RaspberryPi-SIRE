@@ -1,7 +1,9 @@
+from numba.decorators import jit
 import RPi.GPIO as GPIO
 import numpy as np
 
 
+@jit
 class Display:
     def __init__(self):
         self.led_pin = [[18, 4],

@@ -101,3 +101,9 @@ The steps below shows how to disable on-board Bluetooth and related services. Th
 Even after disabling on-board Bluetooth and related services, Bluetooth will be available when a Bluetooth adapter is plugged in.
 
 Note: change the arm_freq to 1400, arm_freq_min=100, and temp_soft_limit=70 in /boot/config.txt
+
+Install Numba:
+sudo apt install libblas-dev llvm python3-pip python3-scipy
+sudo pip install llvmlite==0.15.0
+sudo pip install numba==0.30.1
+sudo pip install librosa

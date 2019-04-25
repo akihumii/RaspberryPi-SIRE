@@ -1,8 +1,10 @@
+from numba.decorators import jit
 import numpy as np
 from filtering import Filtering
 from saving import Saving
 
 
+@jit
 class DataHandler(Saving, Filtering):
     def __init__(self, channel_len, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
         Saving.__init__(self)

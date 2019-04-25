@@ -1,3 +1,4 @@
+from numba.decorators import jit
 import numpy as np
 import pickle
 from sklearn.svm import SVC
@@ -5,6 +6,7 @@ import os
 import sys
 
 
+@jit
 class Training:
     def __init__(self):
         print("started...")

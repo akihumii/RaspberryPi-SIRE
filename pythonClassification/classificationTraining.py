@@ -1,11 +1,11 @@
+from numba.decorators import jit
 import numpy as np
 import pickle
 from sklearn.svm import SVC
-from sklearn import preprocessing
 import os
-import sys
 
 
+@jit
 def train(target_file):
     print("started...")
     # cwd = os.getcwd()

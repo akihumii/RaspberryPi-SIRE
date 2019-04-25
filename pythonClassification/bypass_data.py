@@ -1,8 +1,9 @@
-import numpy as np
+from numba.decorators import jit
 import multiprocessing
 import copy
 
 
+@jit
 class BypassData(multiprocessing.Process):
     def __init__(self, ring_event, tcp_ip_obj, raw_buffer_event, raw_buffer_thread_event, raw_buffer_queue):
         multiprocessing.Process.__init__(self)

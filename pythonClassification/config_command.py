@@ -1,5 +1,8 @@
+from numba.decorators import jit
 from tcpip import TcpIp
 
+
+@jit
 class ConfigCommand:
     def __init__(self, ip_add, port):
         self.tcpip_obj = TcpIp.__init__(ip_add, port)

@@ -1,7 +1,9 @@
+from numba.decorators import jit
 import numpy as np
 import serial
 
 
+@jit
 class ConfigSerial:
     def __init__(self, mode):
         self.ser = None

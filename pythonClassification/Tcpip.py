@@ -1,9 +1,11 @@
+from numba.decorators import jit
 import numpy as np
 import socket
 import sys, errno
 from time import sleep
 
 
+@jit
 class TcpIp:
     def __init__(self, ip_add, port, buffer_size):
         self.ip_add = ip_add

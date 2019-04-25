@@ -1,8 +1,10 @@
+from numba.decorators import jit
 import threading
 from saving import Saving
 from classification_decision import ClassificationDecision
 
 
+@jit
 class ReadNDemultiplex(ClassificationDecision, Saving):
     def __init__(self, tcp_ip_sylph, data_obj, ring_lock):
         Saving.__init__(self)
