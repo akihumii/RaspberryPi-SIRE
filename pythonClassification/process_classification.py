@@ -8,7 +8,6 @@ from classification_decision import ClassificationDecision
 from features import Features
 
 
-@jit
 class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision):
     def __init__(self, features_id,  method, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
         multiprocessing.Process.__init__(self)
@@ -57,6 +56,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
 
         self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
 
+    @jit
     def classify(self):
         for i, x in enumerate(self.channel_decode):
             feature_obj = Features(self.data_raw[int(x)-1], self.sampling_freq, self.features_id)

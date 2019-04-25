@@ -3,8 +3,8 @@ import RPi.GPIO as GPIO
 import numpy as np
 
 
-@jit
 class ConfigGPIO:
+    # @jit
     def __init__(self, pin, mode):
         self.pin = pin
         self.mode = mode

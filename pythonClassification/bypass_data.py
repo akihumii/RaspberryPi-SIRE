@@ -3,7 +3,6 @@ import multiprocessing
 import copy
 
 
-@jit
 class BypassData(multiprocessing.Process):
     def __init__(self, ring_event, tcp_ip_obj, raw_buffer_event, raw_buffer_thread_event, raw_buffer_queue):
         multiprocessing.Process.__init__(self)
@@ -13,6 +12,7 @@ class BypassData(multiprocessing.Process):
         self.raw_buffer_thread_event = raw_buffer_thread_event
         self.raw_buffer_queue = raw_buffer_queue
 
+    @jit
     def run(self):
         print('started bypassing thread...')
         while self.ring_event.is_set() and self.raw_buffer_thread_event.is_set():

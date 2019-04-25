@@ -3,8 +3,8 @@ import numpy as np
 import serial
 
 
-@jit
 class ConfigSerial:
+    # @jit
     def __init__(self, mode):
         self.ser = None
         self.mode = mode

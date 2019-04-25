@@ -6,7 +6,6 @@ import os
 import sys
 
 
-@jit
 class Training:
     def __init__(self):
         print("started...")
@@ -25,6 +24,7 @@ class Training:
 
         self.clf = SVC(kernel='poly', degree=3, gamma='auto')
 
+    @jit
     def train(self):
             for i in range(len(self.file_class)):
                 features_tmp = np.genfromtxt(os.path.join(self.target_dir, self.file_feature[i]), delimiter=',')

@@ -4,8 +4,8 @@ from config_GPIO import ConfigGPIO
 from tcpip import TcpIp
 
 
-@jit
 class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
+    # @jit
     def __init__(self, method, pin_led, mode, ip_add, port):
         ConfigGPIO.__init__(self, pin_led, mode)
         ConfigSerial.__init__(self, mode)

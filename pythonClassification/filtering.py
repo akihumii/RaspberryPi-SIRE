@@ -2,7 +2,6 @@ from numba.decorators import jit
 from scipy import signal
 
 
-@jit
 class Filtering:
     def __init__(self, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
         self.data_filtered = []
@@ -45,11 +44,13 @@ class Filtering:
             filter_type = 'highpass'
             self.filter_flag = False
 
-        [self.filter_b, self.filter_a] = signal.butter(
-            self.__order, filter_thresholds, btype=filter_type)
+        if filter_thresholds:
+            [self.filter_b, self.filter_a] = signal.butter(
+                self.__order, filter_thresholds, btype=filter_type)
 
-        self.filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
+            self.filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
 
+    # @jit
     def filter(self, data_buffer_all):
         # self.data_filtered = [[] for __ in range(len(data_buffer_all))]
         # for i, x in enumerate(data_buffer_all):

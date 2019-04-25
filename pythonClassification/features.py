@@ -2,7 +2,6 @@ from numba.decorators import jit
 import numpy as np
 
 
-@jit
 class Features:
     def __init__(self, data, sampling_freq, *args):
         self.data = data
@@ -10,6 +9,7 @@ class Features:
         self.sampling_freq = sampling_freq
         self.run_list = args
 
+    @jit
     def extract_features(self):
         output = []
         if not self.run_list:  # if input arg is zero, run all.

@@ -4,7 +4,6 @@ import datetime
 import numpy as np
 
 
-@jit
 class Saving:  # save the data
     def __init__(self):
         now = datetime.datetime.now()
@@ -19,6 +18,7 @@ class Saving:  # save the data
         if not os.path.exists(os.path.join("Data", self.__saving_dir_Date)):
             os.makedirs(os.path.join("Data", self.__saving_dir_Date))
 
+    @jit
     def save(self, data, *args):  # save the data
         saving_file_obj = open(self.__saving_full_filename, *args)
         np.savetxt(saving_file_obj, data, fmt="%f", delimiter=",")

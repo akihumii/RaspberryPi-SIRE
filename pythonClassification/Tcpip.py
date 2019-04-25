@@ -5,7 +5,6 @@ import sys, errno
 from time import sleep
 
 
-@jit
 class TcpIp:
     def __init__(self, ip_add, port, buffer_size):
         self.ip_add = ip_add
@@ -43,6 +42,7 @@ class TcpIp:
     def close(self):
         self.socket_obj.close()
 
+    # @jit
     def read(self):  # read data from port
         num_bytes_recorded = 0
         buffer_part = ''
@@ -57,6 +57,7 @@ class TcpIp:
 
         return buffer_part
 
+    @jit
     def send(self, msg):
         try:
             total_sent = 0
@@ -70,6 +71,7 @@ class TcpIp:
             if e.errno == errno.EPIPE:
                 return 1
 
+    @jit
     def clear_buffer(self):
         try:
             packet = self.socket_obj.recv(self.buffer_size)

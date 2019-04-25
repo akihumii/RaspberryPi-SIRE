@@ -3,8 +3,8 @@ import RPi.GPIO as GPIO
 import numpy as np
 
 
-@jit
 class Display:
+    # @jit
     def __init__(self):
         self.led_pin = [[18, 4],
                         [17, 27],

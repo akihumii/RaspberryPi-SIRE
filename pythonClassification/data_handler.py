@@ -1,10 +1,32 @@
 from numba.decorators import jit
+# from numba import jitclass
+# from numba import int64, float64, PyObject
 import numpy as np
 from filtering import Filtering
 from saving import Saving
 
 
 @jit
+def get_buffer_function(data_handler_obj, buffer_read):
+    data_handler_obj.loc_start_orig = np.argwhere(np.array(buffer_read) == data_handler_obj.__flag_start_bit)
+
+    data_handler_obj.loc_start = [x[0] for x in data_handler_obj.loc_start_orig
+                                  if x + data_handler_obj.__sample_len < len(buffer_read)
+                                  and buffer_read[x + data_handler_obj.__sample_len - 1] == data_handler_obj.__flag_end_bit  # check end bit
+                                  and np.isin(buffer_read[x + data_handler_obj.__sample_len - (data_handler_obj.__counter_len * 2) - 2],
+                                  data_handler_obj.__flag_sync_pulse)  # check sync pulse
+                                  and buffer_read[x + data_handler_obj.__sample_len] == data_handler_obj.__flag_start_bit]  # check the next start bit
+
+    if len(data_handler_obj.loc_start) > 0:
+        [data_handler_obj.buffer_process, buffer_leftover] = np.split(buffer_read, [data_handler_obj.loc_start[-1] + data_handler_obj.__sample_len - 1])
+        empty_buffer_flag = False
+    else:
+        buffer_leftover = buffer_read
+        empty_buffer_flag = True
+
+    return data_handler_obj.loc_start_orig, data_handler_obj.loc_start, data_handler_obj.buffer_process, buffer_leftover, empty_buffer_flag
+
+
 class DataHandler(Saving, Filtering):
     def __init__(self, channel_len, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
         Saving.__init__(self)
@@ -27,20 +49,7 @@ class DataHandler(Saving, Filtering):
         self.filter_obj = [Filtering(sampling_freq, hp_thresh, lp_thresh, notch_thresh) for __ in range(self.__channel_len)]
 
     def get_buffer(self, buffer_read):
-        self.loc_start_orig = np.argwhere(np.array(buffer_read) == self.__flag_start_bit)
-
-        self.loc_start = [x[0] for x in self.loc_start_orig
-                          if x + self.__sample_len < len(buffer_read)
-                          and buffer_read[x + self.__sample_len - 1] == self.__flag_end_bit  # check end bit
-                          and np.isin(buffer_read[x+self.__sample_len-(self.__counter_len*2)-2], self.__flag_sync_pulse)  # check sync pulse
-                          and buffer_read[x + self.__sample_len] == self.__flag_start_bit]  # check the next start bit
-
-        if len(self.loc_start) > 0:
-            [self.buffer_process, buffer_leftover] = np.split(buffer_read, [self.loc_start[-1]+self.__sample_len-1])
-            empty_buffer_flag = False
-        else:
-            buffer_leftover = buffer_read
-            empty_buffer_flag = True
+        [self.loc_start_orig, self.loc_start, self.buffer_process, buffer_leftover, empty_buffer_flag] = get_buffer_function(self, buffer_read)
 
         return buffer_leftover, empty_buffer_flag
 

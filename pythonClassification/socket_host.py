@@ -9,8 +9,8 @@ host = "127.0.0.2"
 port = 8000
 
 
-@jit
 class ClientSend(Thread):
+    # @jit
     def __init__(self, ip_add, port):
         Thread.__init__(self)
         print('creating client...')
@@ -39,6 +39,7 @@ class ClientSend(Thread):
 
 
 class Client(Thread):
+    @jit
     def __init__(self, socket):
         Thread.__init__(self)
         self.sock = socket
@@ -50,6 +51,7 @@ class Client(Thread):
             self.sock.send(b'Oi you sent something to me')
 
 
+# @jit
 def random_string(string_length=10):
     """Generate a random string of fixed length """
     letters = string.ascii_lowercase
