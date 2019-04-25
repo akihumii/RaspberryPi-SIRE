@@ -17,6 +17,7 @@ class TcpIp:
 
     def create_host(self):  # act as a host
         if not self.bound_flag:
+            self.socket_obj.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket_obj.bind((self.ip_add, self.port))
             self.bound_flag = True
         while True:
@@ -41,9 +42,10 @@ class TcpIp:
     def close(self):
         self.socket_obj.close()
 
-    def read(self):  # read data from port
+    def read(self, buffer_leftover):  # read data from port
         num_bytes_recorded = 0
-        buffer_part = ''
+        buffer_read = np.array([], dtype=np.uint8)
+        buffer_raw = ''
         while num_bytes_recorded < self.buffer_size:
             try:
                 buffer_part = self.socket_obj.recv(self.buffer_size - num_bytes_recorded)
@@ -51,9 +53,35 @@ class TcpIp:
                 print("Data receive timeout...")
                 break
 
-            num_bytes_recorded = num_bytes_recorded + len(buffer_part)
+            if buffer_part == '':
+                print('Not received anything...')
+                sleep(1)
+            else:
+                buffer_raw = np.append(buffer_raw, buffer_part)
+                buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=np.uint8))
 
-        return buffer_part
+                num_bytes_recorded = num_bytes_recorded + len(buffer_part)
+
+        return np.append(buffer_leftover, buffer_read), buffer_raw
+
+    # def read(self):  # read data from port
+    #     num_bytes_recorded = 0
+    #
+    #     # buffer_part = ''
+    #     while num_bytes_recorded < self.buffer_size:
+    #         try:
+    #             buffer_part = self.socket_obj.recv(self.buffer_size - num_bytes_recorded)
+    #         except socket.timeout:
+    #             print("Data receive timeout...")
+    #             break
+    #
+    #         if buffer_part == '':
+    #             print('Not received anything...')
+    #             sleep(1)
+    #         else:
+    #             num_bytes_recorded = num_bytes_recorded + len(buffer_part)
+    #
+    #     return buffer_part
 
     def send(self, msg):
         try:
