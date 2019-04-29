@@ -48,9 +48,6 @@ if __name__ == "__main__":
     raw_buffer_event = multiprocessing.Event()  # for the thread that send data to GUI
     raw_buffer_event.clear()
     #
-    # raw_buffer_event = multiprocessing.Event()  # when there is GUI binding to server
-    # raw_buffer_event.clear()
-    #
     raw_buffer_queue = multiprocessing.Queue()  # saved the raw buffer to send to GUI
     tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, 1)  # create gui socket object
 
@@ -63,51 +60,54 @@ if __name__ == "__main__":
     tcp_ip_sylph.connect()
     tcp_ip_odin.connect()
 
+    ring_event = multiprocessing.Event()  # to stop the thread that process data
+    # ring_event.set()
+    ring_event.clear()
+    #
+    ring_queue = multiprocessing.Queue()  # saved data across threads
+
+    data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
+
+    thread_process_classification = ProcessClassification(FEATURES_ID, METHOD, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, process_obj)  # thread 2: filter, extract features, classify
+    thread_process_classification.start()  # start thread 2: online classification
+    #
     # run classification when classification GPIO is on
     buffer_leftover = []
+
     while True:
-        if process_obj.input_GPIO():
-            # globals.initialize()  # initialize global variable ring data
+        # if process_obj.input_GPIO():
+        #     if not ring_event.is_set():
+        #     ring_event.set()  # start classifying
+        # globals.initialize()  # initialize global variable ring data
 
-            # ring_lock = multiprocessing.Lock()
-            ring_event = multiprocessing.Event()  # to stop the thread that process data
-            ring_event.set()
-            #
-            ring_queue = multiprocessing.Queue()  # saved data across threads
+        # clear socket buffer
+        # tcp_ip_sylph.clear_buffer()
+        # print('cleared buffer...')
 
-            data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
+        # while process_obj.input_GPIO():
+        # print('inside the while loop to read buffer...')
+        [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
+        # buffer_part = tcp_ip_sylph.read()  # read buffer from socket
+        # buffer_read = np.append(buffer_leftover, np.frombuffer(buffer_part, dtype=np.uint8))  # attach the leftover to new data for local processing
+        if raw_buffer_event.is_set():  # will be true when there is a client successfully bound the server
+            # print('inserting buffer...')
+            # buffer_sent = np.frombuffer(buffer_part, dtype=np.str)
+            raw_buffer_queue.put_nowait(buffer_raw)
+            # print(buffer_raw)
+        # print(buffer_part)
+        # else:
+        # print('not inserting buffer...')
+        # print(buffer_read)
 
-            thread_process_classification = ProcessClassification(FEATURES_ID, METHOD, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
-            thread_process_classification.start()  # start thread 2: online classification
-            #
+        buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)  # get buffer into data
+        if not empty_buffer_flag:
+            data_obj.get_data_channel()  # demultiplex and get the channel data
+            # print(data_obj.data_processed[-1, -1])
+            # data_obj.save(data_obj.data_processed, "a")
+            # print('putting data...')
+            data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
 
-            # clear socket buffer
-            # tcp_ip_sylph.clear_buffer()
-            # print('cleared buffer...')
-
-            while process_obj.input_GPIO():
-                # print('inside the while loop to read buffer...')
-                [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
-                # buffer_part = tcp_ip_sylph.read()  # read buffer from socket
-                # buffer_read = np.append(buffer_leftover, np.frombuffer(buffer_part, dtype=np.uint8))  # attach the leftover to new data for local processing
-                if raw_buffer_event.is_set():
-                    # print('inserting buffer...')
-                    # buffer_sent = np.frombuffer(buffer_part, dtype=np.str)
-                    raw_buffer_queue.put_nowait(buffer_raw)
-                    # print(buffer_raw)
-                # print(buffer_part)
-                # else:
-                # print('not inserting buffer...')
-                # print(buffer_read)
-
-                buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)  # get buffer into data
-                if not empty_buffer_flag:
-                    data_obj.get_data_channel()  # demultiplex and get the channel data
-                    # print(data_obj.data_processed[-1, -1])
-                    # data_obj.save(data_obj.data_processed, "a")
-                    data_obj.fill_ring_data(ring_queue)  # fill the ring buffer
-
-            ring_event.clear()
+            # ring_event.clear()
             # raw_buffer_event.clear()
             #
             # tcp_ip_sylph.write_disconnect()
@@ -116,16 +116,19 @@ if __name__ == "__main__":
             # tcp_ip_odin.close()
             # tcp_ip_gui.close()
 
-            thread_process_classification.join()  # terminate thread 2
+            # thread_process_classification.join()  # terminate thread 2
             # thread_bypass_data.join()  # terminate thread for bypassing data
 
-            print('ring event cleared...')
-        else:
-            [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
-            if raw_buffer_event.is_set():
-                # print('inserting buffer...')
-                # buffer_sent = np.frombuffer(buffer_part, dtype=np.str)
-                raw_buffer_queue.put_nowait(buffer_raw)
+            # print('ring event cleared...')
+        # else:
+        #     if ring_event.is_set():
+        #         ring_event.clear()
+
+        # [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
+        # if raw_buffer_event.is_set():
+        #     # print('inserting buffer...')
+        #     # buffer_sent = np.frombuffer(buffer_part, dtype=np.str)
+        #     raw_buffer_queue.put_nowait(buffer_raw)
 
             # print('Main waiting for connection: %d...' % count)
             # count += 1
