@@ -8,7 +8,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision):
-    def __init__(self, features_id,  method, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
+    def __init__(self, features_id,  method, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
         multiprocessing.Process.__init__(self)
         Saving.__init__(self)
         ClassificationDecision.__init__(self, method, pin_led, 'out', ip_add, port)
@@ -20,6 +20,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
         self.ring_event = ring_event
         self.ring_queue = ring_queue
         self.features_id = features_id
+        self.process_obj = process_obj
 
         self.__channel_len = channel_len
 
@@ -33,18 +34,18 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
         self.load_classifier()
         print('started classification thread...')
         while True:
-            if self.ring_event.is_set():
+            # if self.ring_event.is_set():
                 # print('pause processing...')
                 # break
-                while not self.ring_queue.empty():  # loop until ring queue has some thing
-                    self.data_raw = self.ring_queue.get()
-                    # print('getting data...')
-                    # print(self.data_raw)
-                    self.save(self.data_raw, "a")
+            while not self.ring_queue.empty():  # loop until ring queue has some thing
+                self.data_raw = self.ring_queue.get()
+                # print('getting data...')
+                # print(self.data_raw)
+                self.save(self.data_raw, "a")
 
-                # start classifying when data in ring queue has enough data
-                if np.size(self.data_raw, 0) > (self.window_overlap * self.sampling_freq):
-                    self.classify()  # do the prediction and the output
+            # start classifying when data in ring queue has enough data
+            if np.size(self.data_raw, 0) > (self.window_overlap * self.sampling_freq):
+                self.classify()  # do the prediction and the output
 
         # self.stop()  # stop GPIO/serial classification display output
         # print('stopped classification thread...')
@@ -63,8 +64,9 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
             try:
                 prediction = self.clf[i].predict([features]) - 1
                 if prediction != (self.prediction >> i & 1):  # if prediction changes
-                    self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
-                    print('Prediction: %s' % format(self.prediction, 'b'))
+                    if self.process_obj.input_GPIO():
+                        self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
+                        print('Prediction: %s' % format(self.prediction, 'b'))
             except ValueError:
                 print('prediction failed...')
 
