@@ -34,6 +34,7 @@ class BypassData(multiprocessing.Process):
                 while not broken_status:  # stop sending when the pipe broke
                     if not self.raw_buffer_queue.empty():
                         data = self.raw_buffer_queue.get_nowait()
+                        # print(data)
                         broken_status = client_socket_obj.send(data)
             #     print('successfully send data to GUI...')
             # else:

@@ -94,6 +94,7 @@ if __name__ == "__main__":
                     # print('inserting buffer...')
                     # buffer_sent = np.frombuffer(buffer_part, dtype=np.str)
                     raw_buffer_queue.put_nowait(buffer_raw)
+                    # print(buffer_raw)
                 # print(buffer_part)
                 # else:
                 # print('not inserting buffer...')

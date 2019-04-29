@@ -62,7 +62,7 @@ class TcpIp:
 
                 num_bytes_recorded = num_bytes_recorded + len(buffer_part)
 
-        return np.append(buffer_leftover, buffer_read), buffer_raw
+        return np.append(buffer_leftover, buffer_read), ''.join(buffer_raw)
 
     # def read(self):  # read data from port
     #     num_bytes_recorded = 0
