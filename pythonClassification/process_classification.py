@@ -31,6 +31,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
     def run(self):
         self.setup()  # setup GPIO/serial classification display output
         self.load_classifier()
+        print('started classification thread...')
         while True:
             if not self.ring_event.is_set():
                 print('pause processing...')
@@ -45,6 +46,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
                 self.classify()  # do the prediction and the output
 
         self.stop()  # stop GPIO/serial classification display output
+        print('stopped classification thread...')
 
     def load_classifier(self):
         filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier'))
