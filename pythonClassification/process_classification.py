@@ -33,20 +33,21 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
         self.load_classifier()
         print('started classification thread...')
         while True:
-            if not self.ring_event.is_set():
-                print('pause processing...')
-                break
+            if self.ring_event.is_set():
+                # print('pause processing...')
+                # break
+                while not self.ring_queue.empty():  # loop until ring queue has some thing
+                    self.data_raw = self.ring_queue.get()
+                    # print('getting data...')
+                    # print(self.data_raw)
+                    self.save(self.data_raw, "a")
 
-            while not self.ring_queue.empty():  # loop until ring queue has some thing
-                self.data_raw = self.ring_queue.get()
-                self.save(self.data_raw, "a")
+                # start classifying when data in ring queue has enough data
+                if np.size(self.data_raw, 0) > (self.window_overlap * self.sampling_freq):
+                    self.classify()  # do the prediction and the output
 
-            # start classifying when data in ring queue has enough data
-            if np.size(self.data_raw, 0) > (self.window_overlap * self.sampling_freq):
-                self.classify()  # do the prediction and the output
-
-        self.stop()  # stop GPIO/serial classification display output
-        print('stopped classification thread...')
+        # self.stop()  # stop GPIO/serial classification display output
+        # print('stopped classification thread...')
 
     def load_classifier(self):
         filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier'))
