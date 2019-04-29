@@ -52,7 +52,7 @@ if __name__ == "__main__":
     # raw_buffer_event.clear()
     #
     raw_buffer_queue = multiprocessing.Queue()  # saved the raw buffer to send to GUI
-    tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, BUFFER_SIZE)  # create gui socket object
+    tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, 1)  # create gui socket object
 
     thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue)  # send data to GUI in another thread
     thread_bypass_data.start()  # start thread to bypass data to GUI
