@@ -42,8 +42,8 @@ class CommandOdin:
     def send_start_sequence(self):  # send all parameters except channel enable
         time.sleep(0.2)
         self.send_start()
-        self.get_coefficients()
         self.amplitude = self.amplitude_default
+        self.get_coefficients()
         time.sleep(1)
         for i in range(self.num_channel):
             self.send_pulse_duration(i)
@@ -93,9 +93,13 @@ class CommandOdin:
 
     def get_coefficients(self):
         coefficients = np.genfromtxt('formula.txt', delimiter=',', defaultfmt='%f')
-        self.amplitude_a = coefficients[0]
-        self.amplitude_b = coefficients[1]
-        self.amplitude_c = coefficients[2]
+        self.amplitude_a = coefficients[0, 0]
+        self.amplitude_b = coefficients[0, 1]
+        self.amplitude_c = coefficients[0, 2]
+
+        self.amplitude = coefficients[1, :].astype(np.double)
+        self.pulse_duration = coefficients[2, :].astype(int)
+        self.frequency = coefficients[3, 0].astype(int)
 
     def _get_pulse_duration_byte(self, channel):
         output = int(np.array(self.pulse_duration[channel]/5 - 3))

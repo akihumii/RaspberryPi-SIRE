@@ -96,6 +96,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 command = self.odin_obj.send_channel_enable()
                 print('sending command to odin...')
                 print(command)
+                # print(self.odin_obj.amplitude)
                 return command
             else:
                 print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
