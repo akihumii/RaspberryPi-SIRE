@@ -40,6 +40,7 @@ class CommandOdin:
         self.sock = socket
 
     def send_start_sequence(self):  # send all parameters except channel enable
+        time.sleep(0.2)
         self.send_start()
         self.get_coefficients()
         self.amplitude = self.amplitude_default
@@ -53,6 +54,7 @@ class CommandOdin:
         self.send_frequency()
 
     def send_stop_sequence(self):  # send stop sequence
+        time.sleep(0.2)
         self.channel_enable = 0
         self.amplitude = np.zeros(4, dtype=np.double)
         for i in range(self.num_channel):

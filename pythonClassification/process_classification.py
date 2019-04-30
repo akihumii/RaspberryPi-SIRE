@@ -8,10 +8,10 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecision):
-    def __init__(self, odin_obj, features_id,  method, pin_led, ip_add, port, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue):
+    def __init__(self, odin_obj, features_id,  method, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
         multiprocessing.Process.__init__(self)
         Saving.__init__(self)
-        ClassificationDecision.__init__(self, method, pin_led, 'out', ip_add, port, odin_obj)
+        ClassificationDecision.__init__(self, method, pin_led, 'out')
 
         self.clf = None
         self.window_class = window_class  # seconds
@@ -20,6 +20,7 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
         self.ring_event = ring_event
         self.ring_queue = ring_queue
         self.features_id = features_id
+        self.process_obj = process_obj
 
         self.__channel_len = channel_len
 
@@ -29,16 +30,18 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
         self.odin_obj = odin_obj
         self.prediction = 0
 
+        self.start_stimulation_flag = False
+
     def run(self):
         self.setup()  # setup GPIO/serial classification display output
         self.load_classifier()  # load classifier
-        self.odin_obj.send_start()  # send start bit to odin
-        self.odin_obj.send_initialize()  # send default parameters to odin
 
+        print('started classification thread...')
         while True:
-            if not self.ring_event.is_set():
-                print('pause processing...')
-                break
+            if not self.start_stimulation_flag and self.process_obj.input_GPIO():
+                print('started stimulation...')
+                self.start_stimulation_flag = True
+                # self.odin_obj.send_start_sequence()  # send start bit to odin
 
             while not self.ring_queue.empty():  # loop until ring queue has some thing
                 self.data_raw = self.ring_queue.get()
@@ -48,8 +51,10 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
             if np.size(self.data_raw, 0) > (self.window_overlap * self.sampling_freq):
                 self.classify()  # do the prediction and the output
 
-        self.odin_obj.send_stop()  # send stop bit to odin
-        self.stop()  # stop GPIO/serial classification display output
+            if self.start_stimulation_flag and not self.process_obj.input_GPIO():
+                print('stopped stimulation...')
+                self.start_stimulation_flag = False
+                # self.odin_obj.send_stop_sequence()  # send stop bit to odin
 
     def load_classifier(self):
         filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier'))
@@ -67,6 +72,9 @@ class ProcessClassification(multiprocessing.Process, Saving, ClassificationDecis
                 if prediction != (self.prediction >> i & 1):  # if prediction changes
                     self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
                     print('Prediction: %s' % format(self.prediction, 'b'))
+                    # if self.start_stimulation_flag:
+                    #     self.odin_obj.channel_enable = self.prediction
+                    #     self.odin_obj.send_channel_enable()
             except ValueError:
                 print('prediction failed...')
 

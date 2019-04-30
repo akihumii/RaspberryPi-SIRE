@@ -1,4 +1,5 @@
 import multiprocessing
+import numpy as np
 import RPi.GPIO as GPIO
 from time import sleep
 from tcpip import TcpIp
@@ -6,12 +7,15 @@ from data_handler import DataHandler
 from process_classification import ProcessClassification
 from command_odin import CommandOdin
 from config_GPIO import ConfigGPIO
+from bypass_data import BypassData
 
 IP_SYLPH = "127.0.0.1"
 IP_ODIN = "192.168.4.1"
+IP_GUI = "192.168.4.3"
 IP_STIMULATOR = ""
 PORT_SYLPH = 8888
 PORT_ODIN = 30000
+PORT_GUI = 8000
 PORT_STIMULATOR = 0
 
 BUFFER_SIZE = 25 * 65  # about 50 ms
@@ -41,53 +45,42 @@ if __name__ == "__main__":
 
     count = 1
     count2 = 1
+
+    raw_buffer_event = multiprocessing.Event()  # for the thread that send data to GUI
+    raw_buffer_event.clear()
+
+    raw_buffer_queue = multiprocessing.Queue()  # saved the raw buffer to send to GUI
+    tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, 1)  # create gui socket object
+
+    thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue)  # send data to GUI in another thread
+    thread_bypass_data.start()  # start thread to bypass data to GUI
+
+    tcp_ip_sylph = TcpIp(IP_SYLPH, PORT_SYLPH, BUFFER_SIZE)  # create sylph socket object
+    tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, 1)  # create odin socket object
+
+    odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
+
+    tcp_ip_sylph.connect()
+    tcp_ip_odin.connect()
+
+    ring_event = multiprocessing.Event()  # to stop the thread that process data
+    ring_event.clear()
+
+    ring_queue = multiprocessing.Queue()  # saved data across threads
+
+    data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
+
+    thread_process_classification = ProcessClassification(odin_obj, FEATURES_ID, METHOD, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, process_obj)  # thread 2: filter, extract features, classify
+    thread_process_classification.start()  # start thread 2: online classification
+    buffer_leftover = []
+
     while True:
-        if process_obj.input_GPIO():
-            # globals.initialize()  # initialize global variable ring data
+        [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
+        if raw_buffer_event.is_set():  # will be true when there is a client successfully bound the server
+            raw_buffer_queue.put_nowait(buffer_raw)
 
-            ring_lock = multiprocessing.Lock()
-            ring_event = multiprocessing.Event()
-            ring_event.set()
+        buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)  # get buffer into data
+        if not empty_buffer_flag:
+            data_obj.get_data_channel()  # demultiplex and get the channel data
+            data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
 
-            ring_queue = multiprocessing.Queue()  # saved data across threads
-
-            tcp_ip_sylph = TcpIp(IP_SYLPH, PORT_SYLPH, BUFFER_SIZE)  # create sylph socket object
-            tcp_ip_sylph.connect()
-
-            tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, BUFFER_SIZE)  # create odin socket object
-            tcp_ip_odin.connect()
-            odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
-
-            data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
-
-            thread_process_classification = ProcessClassification(odin_obj, FEATURES_ID, METHOD, PIN_LED, IP_STIMULATOR, PORT_STIMULATOR, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue)  # thread 2: filter, extract features, classify
-
-            thread_process_classification.start()  # start thread 2: online classification
-
-            buffer_leftover = []  # run classification when classification GPIO is on
-
-            tcp_ip_sylph.clear_buffer()  # clear socket buffer
-
-            while process_obj.input_GPIO():
-                buffer_read = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
-                buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)  # get buffer into data
-                if not empty_buffer_flag:
-                    data_obj.get_data_channel()  # demultiplex and get the channel data
-                    # print(data_obj.data_processed[-1, -1])
-                    # data_obj.save(data_obj.data_processed, "a")
-                    data_obj.fill_ring_data(ring_queue)  # fill the ring buffer
-
-            ring_event.clear()  # stop thread 2
-
-            tcp_ip_sylph.write_disconnect()
-            # tcp_ip_odin.write_disconnect()  # write 16 char to odin socket
-            tcp_ip_sylph.close()
-            tcp_ip_odin.close()
-
-            thread_process_classification.join()  # terminate thread 2
-
-            print('ring event cleared...')
-        else:
-            print('Main waiting for connection: %d...' % count)
-            count += 1
-            sleep(3)

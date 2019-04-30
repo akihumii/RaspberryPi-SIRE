@@ -54,16 +54,25 @@ def random_string(string_length=10):
     return ''.join(random.choice(letters) for i in range(string_length))
 
 
-obj_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-ClientSend(host, port)
-print('sending something...')
-obj_socket.bind((host, port))
-print('socket bound...')
-obj_socket.listen(5)
-print('socket listening...')
+def create_client():
+    ClientSend(host, port)  # create client and send something
+    print('sending something...')
 
-while 1:
-    clientsocket, address = obj_socket.accept()
-    print('Client connected...')
-    time.sleep(4)
-    Client(clientsocket)
+
+def listen_socket():
+    obj_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    obj_socket.bind((host, port))
+    print('socket bound...')
+    obj_socket.listen(5)
+    print('socket listening...')
+
+    while 1:
+        clientsocket, address = obj_socket.accept()  # waiting for connection
+        print('Client connected...')
+        Client(clientsocket)  # receive msg from client
+        time.sleep(4)
+
+
+if __name__ == "__main__":
+    listen_socket()
+    create_client()
