@@ -64,25 +64,6 @@ class TcpIp:
 
         return np.append(buffer_leftover, buffer_read), ''.join(buffer_raw)
 
-    # def read(self):  # read data from port
-    #     num_bytes_recorded = 0
-    #
-    #     # buffer_part = ''
-    #     while num_bytes_recorded < self.buffer_size:
-    #         try:
-    #             buffer_part = self.socket_obj.recv(self.buffer_size - num_bytes_recorded)
-    #         except socket.timeout:
-    #             print("Data receive timeout...")
-    #             break
-    #
-    #         if buffer_part == '':
-    #             print('Not received anything...')
-    #             sleep(1)
-    #         else:
-    #             num_bytes_recorded = num_bytes_recorded + len(buffer_part)
-    #
-    #     return buffer_part
-
     def send(self, msg):
         try:
             total_sent = 0
@@ -91,9 +72,11 @@ class TcpIp:
                 if sent == 0:
                     raise RuntimeError("Socket connection broken...")
                 total_sent = total_sent + sent
+            # print('successfully sent...')
             return 0
         except IOError as e:
             if e.errno == errno.EPIPE:
+                print('failed to send...')
                 return 1
 
     def clear_buffer(self):
