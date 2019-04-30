@@ -89,6 +89,7 @@ class CommandOdin:
     def send_channel_enable(self):
         address = self.address.get('channel_enable')
         self.sock.send(self._convert_to_char([address, self.channel_enable]))
+        return [address, self.channel_enable]
 
     def get_coefficients(self):
         coefficients = np.genfromtxt('formula.txt', delimiter=',', defaultfmt='%f')

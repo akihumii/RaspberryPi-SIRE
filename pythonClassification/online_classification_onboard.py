@@ -19,6 +19,7 @@ PORT_GUI = 8000
 PORT_STIMULATOR = 0
 
 BUFFER_SIZE = 25 * 65  # about 50 ms
+BUFFER_SIZE_SENDING = 1  # buffer size to send data to socket
 RINGBUFFER_SIZE = 40960
 CHANNEL_LEN = 10
 CHANNEL_DECODE = [4, 5, 6, 7]
@@ -50,13 +51,13 @@ if __name__ == "__main__":
     raw_buffer_event.clear()
 
     raw_buffer_queue = multiprocessing.Queue()  # saved the raw buffer to send to GUI
-    tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, 1)  # create gui socket object
+    tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, BUFFER_SIZE_SENDING)  # create gui socket object
 
     thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue)  # send data to GUI in another thread
     thread_bypass_data.start()  # start thread to bypass data to GUI
 
     tcp_ip_sylph = TcpIp(IP_SYLPH, PORT_SYLPH, BUFFER_SIZE)  # create sylph socket object
-    tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, 1)  # create odin socket object
+    tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, BUFFER_SIZE_SENDING)  # create odin socket object
 
     odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
 
@@ -77,7 +78,7 @@ if __name__ == "__main__":
     while True:
         [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
         if raw_buffer_event.is_set():  # will be true when there is a client successfully bound the server
-            raw_buffer_queue.put_nowait(buffer_raw)
+            raw_buffer_queue.put(buffer_raw)
 
         buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)  # get buffer into data
         if not empty_buffer_flag:
