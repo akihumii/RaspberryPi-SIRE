@@ -8,9 +8,9 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, features_id,  method, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
+    def __init__(self, odin_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
         multiprocessing.Process.__init__(self)
-        ClassificationDecision.__init__(self, method, pin_led, 'out')
+        ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
         self.clf = None
         self.window_class = window_class  # seconds
@@ -21,10 +21,19 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.features_id = features_id
         self.process_obj = process_obj
 
+        method_classify_all = {
+            'features': self.classify_features,
+            'thresholds': self.classify_thresholds
+        }
+        self.classify_function = method_classify_all.get(method_classify)
+
+        self.thresholds = thresholds
+
         self.__channel_len = channel_len
 
-        self.data_raw = []
+        self.data = []
         self.channel_decode = []
+        self.saving_file_all = Saving()
 
         self.odin_obj = odin_obj
         self.prediction = 0
@@ -46,23 +55,23 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
             # start classifying when data in ring queue has enough data
             if not self.start_classify_flag:
-                self.start_classify_flag = np.size(self.data_raw, 0) > (self.window_overlap * self.sampling_freq)
+                self.start_classify_flag = np.size(self.data, 0) > (self.window_overlap * self.sampling_freq)
 
             while not self.ring_queue.empty():  # loop until ring queue has some thing
-                self.data_raw = self.ring_queue.get()
-                # print(self.data_raw[-1, 11])  # print counter
-                # self.save(self.data_raw, "a")  # save data in Rpi
+                self.data = self.ring_queue.get()
+                # print(self.data[-1, 11])  # print counter
+                self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
 
                 if self.start_classify_flag:
                     command_temp = self.classify()  # do the prediction and the output
 
-                    command_array = np.zeros([np.size(self.data_raw, 0), 2])  # create an empty command array
+                    command_array = np.zeros([np.size(self.data, 0), 2])  # create an empty command array
                     command_array[0, :] = command_temp
 
-                    counter = self.data_raw[:, 11][np.newaxis].T  # get the vertical matrix of counter
+                    counter = self.data[:, 11][np.newaxis].T  # get the vertical matrix of counter
 
-                    if self.start_stimulation_flag:
-                        saving_file.save(np.append(counter, command_array, axis=1), "a")  # save the counter and the command
+                    # if self.start_stimulation_flag:
+                    #     saving_file.save(np.append(counter, command_array, axis=1), "a")  # save the counter and the command
 
             if self.start_stimulation_flag and not self.process_obj.input_GPIO():  # send ending sequence to setimulator
                 print('stopped stimulation...')
@@ -79,10 +88,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
     def classify(self):
         prediction_changed_flag = False
         for i, x in enumerate(self.channel_decode):
-            feature_obj = Features(self.data_raw[int(x)-1], self.sampling_freq, self.features_id)
-            features = feature_obj.extract_features()
             try:
-                prediction = self.clf[i].predict([features]) - 1
+                prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
                 if prediction != (self.prediction >> i & 1):  # if prediction changes
                     self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
                     prediction_changed_flag = True
@@ -103,6 +110,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 return [0, 0]
         else:
             return [0, 0]
+
+    def classify_features(self, channel_i, data):
+        features = self.extract_features(data)
+        prediction = self.clf[channel_i].predict([features]) - 1
+        return prediction
+
+    def classify_thresholds(self, channel_i, data):
+        prediction = data >= self.thresholds[channel_i]
+        prediction = any(prediction)
+        return int(prediction)
+
+    def extract_features(self, data):
+        feature_obj = Features(data, self.sampling_freq, self.features_id)
+        features = feature_obj.extract_features()
+        return features
 
 
 

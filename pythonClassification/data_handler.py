@@ -7,7 +7,7 @@ class DataHandler(Saving, Filtering):
     def __init__(self, channel_len, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
         Saving.__init__(self)
         Filtering.__init__(self, sampling_freq, hp_thresh, lp_thresh, notch_thresh)
-        self.data_orig = []
+        self.data_raw = []
         self.data_processed = []
         self.buffer_process = []
         self.loc_start = []
@@ -43,7 +43,7 @@ class DataHandler(Saving, Filtering):
         return buffer_leftover, empty_buffer_flag
 
     def get_data_channel(self):  # obtain complete samples and form a matrix ( data_channel )
-        data_all = [self.buffer_process[x:x + self.__sample_len-1] for x in self.loc_start]
+        data_all = [self.buffer_process[x: x + self.__sample_len-1] for x in self.loc_start]
         data_all = np.vstack(data_all)  # stack the arrays into one column
 
         self.data_processed = data_all[:, 1:self.__sample_len-1]
@@ -53,20 +53,22 @@ class DataHandler(Saving, Filtering):
         [data_channel, data_rest] = np.hsplit(self.data_processed, [self.__channel_len*2])
         [data_sync_pulse, data_counter] = np.hsplit(data_rest, [self.__sync_pulse_len])
 
-        data_channel = np.roll(data_channel, 2)  # roll the data as the original matrix starts from channel 3
-
         # convert two bytes into one 16-bit integer
         data_channel = np.ndarray(shape=(len_data, self.__channel_len), dtype='>u2',
                                   buffer=data_channel.astype(np.uint8))
         data_counter = np.ndarray(shape=(len_data, self.__counter_len), dtype='>u2',
                                   buffer=data_counter.astype(np.uint8))
 
-        data_channel = (data_channel.astype(np.float64) - 32768) * 0.000195  # convert to integer
+        data_channel = np.roll(data_channel, -1)  # roll the data as the original matrix starts from channel 3
 
-        data_channel = np.transpose(np.vstack([self.filter_obj[x].filter(data_channel[:, x])
-                                               for x in range(self.__channel_len)]))
+        data_channel = (data_channel.astype(np.float64) - 32768) * 0.000000195  # convert to volts
 
-        self.data_processed = np.hstack([data_channel, data_sync_pulse, data_counter])
+        self.data_raw = np.hstack([data_channel, data_sync_pulse, data_counter])
+
+        data_channel_filtered = np.transpose(np.vstack([self.filter_obj[x].filter(data_channel[:, x])
+                                                        for x in range(self.__channel_len)]))
+
+        self.data_processed = np.hstack([data_channel_filtered, data_sync_pulse, data_counter])
 
     def fill_ring_data(self, ring_queue):
         if ring_queue.full():

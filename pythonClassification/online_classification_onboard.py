@@ -8,6 +8,7 @@ from process_classification import ProcessClassification
 from command_odin import CommandOdin
 from config_GPIO import ConfigGPIO
 from bypass_data import BypassData
+from saving import Saving
 
 IP_SYLPH = "127.0.0.1"
 IP_ODIN = "192.168.4.1"
@@ -30,13 +31,15 @@ PIN_LED = [[18, 4],
 
 FEATURES_ID = [5, 7]
 PIN_OFF = 24
-METHOD = 'GPIO'  # METHOD for output display
+METHOD_IO = 'GPIO'  # METHOD for output display
+METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
+THRESHOLDS = [1, 1, 5e-3, 0]
 
 WINDOW_CLASS = 0.2  # second
 WINDOW_OVERLAP = 0.05  # second
 SAMPLING_FREQ = 1250  # sample/second
 
-HP_THRESH = 0
+HP_THRESH = 100
 LP_THRESH = 0
 NOTCH_THRESH = 50
 
@@ -71,9 +74,11 @@ if __name__ == "__main__":
 
     data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-    thread_process_classification = ProcessClassification(odin_obj, FEATURES_ID, METHOD, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, process_obj)  # thread 2: filter, extract features, classify
+    thread_process_classification = ProcessClassification(odin_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, process_obj)  # thread 2: filter, extract features, classify
     thread_process_classification.start()  # start thread 2: online classification
     buffer_leftover = []
+
+    saving_file_raw = Saving()
 
     while True:
         [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
@@ -81,6 +86,9 @@ if __name__ == "__main__":
             raw_buffer_queue.put(buffer_raw)
 
         buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)  # get buffer into data
+
+        saving_file_raw.save(data_obj.data_raw, "a")  # save the raw data
+
         if not empty_buffer_flag:
             data_obj.get_data_channel()  # demultiplex and get the channel data
             data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread

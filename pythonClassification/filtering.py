@@ -31,22 +31,21 @@ class Filtering:
 
         if self.high_pass_threshold > 0 and self.low_pass_threshold > 0:
             filter_thresholds = [self.high_pass_threshold, self.low_pass_threshold]
-            filter_type = 'bandpass'
+            filter_type = 'band'
         elif self.high_pass_threshold > 0 and self.low_pass_threshold == 0:
             filter_thresholds = self.high_pass_threshold
-            filter_type = 'highpass'
+            filter_type = 'hp'
         elif self.high_pass_threshold == 0 and self.low_pass_threshold > 0:
             filter_thresholds = self.low_pass_threshold
-            filter_type = 'lowpass'
+            filter_type = 'low'
         else:
-            filter_thresholds = 0
-            filter_type = 'highpass'
             self.filter_flag = False
 
-        [self.filter_b, self.filter_a] = signal.butter(
-            self.__order, filter_thresholds, btype=filter_type)
+        if self.filter_flag:
+            [self.filter_b, self.filter_a] = signal.butter(
+                self.__order, filter_thresholds, filter_type)
 
-        self.filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
+            self.filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
 
     def filter(self, data_buffer_all):
         # self.data_filtered = [[] for __ in range(len(data_buffer_all))]
@@ -56,7 +55,6 @@ class Filtering:
         if self.filter_flag:
             self.data_filtered, self.filter_z = signal.lfilter(self.filter_b, self.filter_a, data_buffer_all,
                                                                zi=self.filter_z)
-
             return self.data_filtered
         else:
             return data_buffer_all
