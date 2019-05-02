@@ -60,7 +60,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             while not self.ring_queue.empty():  # loop until ring queue has some thing
                 self.data = self.ring_queue.get()
                 # print(self.data[-1, 11])  # print counter
-                self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
+                # self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
 
                 if self.start_classify_flag:
                     command_temp = self.classify()  # do the prediction and the output
@@ -70,8 +70,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
                     counter = self.data[:, 11][np.newaxis].T  # get the vertical matrix of counter
 
-                    # if self.start_stimulation_flag:
-                    #     saving_file.save(np.append(counter, command_array, axis=1), "a")  # save the counter and the command
+                    if self.start_stimulation_flag:
+                        saving_file.save(np.append(counter, command_array, axis=1), "a")  # save the counter and the command
 
             if self.start_stimulation_flag and not self.process_obj.input_GPIO():  # send ending sequence to setimulator
                 print('stopped stimulation...')

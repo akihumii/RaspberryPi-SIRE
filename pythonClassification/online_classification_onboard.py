@@ -87,7 +87,7 @@ if __name__ == "__main__":
 
         buffer_leftover, empty_buffer_flag = data_obj.get_buffer(buffer_read)  # get buffer into data
 
-        saving_file_raw.save(data_obj.data_raw, "a")  # save the raw data
+        # saving_file_raw.save(data_obj.data_raw, "a")  # save the raw data
 
         if not empty_buffer_flag:
             data_obj.get_data_channel()  # demultiplex and get the channel data

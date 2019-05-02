@@ -46,7 +46,7 @@ class DataHandler(Saving, Filtering):
         data_all = [self.buffer_process[x: x + self.__sample_len-1] for x in self.loc_start]
         data_all = np.vstack(data_all)  # stack the arrays into one column
 
-        self.data_processed = data_all[:, 1:self.__sample_len-1]
+        self.data_processed = data_all[:, 1:self.__sample_len-1]  # exclude start flag and stop flag
 
         len_data = len(self.data_processed)
 
@@ -59,7 +59,7 @@ class DataHandler(Saving, Filtering):
         data_counter = np.ndarray(shape=(len_data, self.__counter_len), dtype='>u2',
                                   buffer=data_counter.astype(np.uint8))
 
-        data_channel = np.roll(data_channel, -1)  # roll the data as the original matrix starts from channel 3
+        data_channel = np.roll(data_channel, -2)  # roll the data as the original matrix starts from channel 3
 
         data_channel = (data_channel.astype(np.float64) - 32768) * 0.000000195  # convert to volts
 
