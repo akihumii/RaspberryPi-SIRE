@@ -31,9 +31,11 @@ PIN_LED = [[18, 4],
 
 FEATURES_ID = [5, 7]
 PIN_OFF = 24
+PIN_RESET = 4
+FLAG_RESET = False
 METHOD_IO = 'GPIO'  # METHOD for output display
 METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
-THRESHOLDS = [1, 1, 5e-3, 0]
+THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
 
 WINDOW_CLASS = 0.2  # second
 WINDOW_OVERLAP = 0.05  # second
@@ -46,6 +48,9 @@ NOTCH_THRESH = 50
 if __name__ == "__main__":
     process_obj = ConfigGPIO(PIN_OFF, 'in')
     process_obj.setup_GPIO()
+
+    pin_reset_obj = ConfigGPIO(PIN_RESET, 'in')
+    pin_reset_obj.setup_GPIO()
 
     count = 1
     count2 = 1
@@ -74,7 +79,7 @@ if __name__ == "__main__":
 
     data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-    thread_process_classification = ProcessClassification(odin_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, process_obj)  # thread 2: filter, extract features, classify
+    thread_process_classification = ProcessClassification(odin_obj, pin_reset_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, process_obj)  # thread 2: filter, extract features, classify
     thread_process_classification.start()  # start thread 2: online classification
     buffer_leftover = []
 
@@ -92,4 +97,5 @@ if __name__ == "__main__":
         if not empty_buffer_flag:
             data_obj.get_data_channel()  # demultiplex and get the channel data
             data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
+
 

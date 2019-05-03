@@ -42,9 +42,13 @@ class CommandOdin:
     def send_start_sequence(self):  # send all parameters except channel enable
         time.sleep(0.2)
         self.send_start()
-        self.amplitude = self.amplitude_default
+        # self.amplitude = self.amplitude_default
         self.get_coefficients()
         time.sleep(1)
+        self.send_parameters()
+        time.sleep(0.2)
+
+    def send_parameters(self):
         for i in range(self.num_channel):
             self.send_pulse_duration(i)
             time.sleep(0.04)

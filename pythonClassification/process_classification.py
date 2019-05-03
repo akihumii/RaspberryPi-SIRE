@@ -2,13 +2,14 @@ import multiprocessing
 import os
 import numpy as np
 import pickle
+import time
 from saving import Saving
 from classification_decision import ClassificationDecision
 from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
+    def __init__(self, odin_obj, pin_reset_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
@@ -38,8 +39,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.odin_obj = odin_obj
         self.prediction = 0
 
+        self.pin_reset_obj = pin_reset_obj
+
         self.start_classify_flag = False
         self.start_stimulation_flag = False
+        self.flag_reset = False
 
     def run(self):
         self.setup()  # setup GPIO/serial classification display output
@@ -51,6 +55,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 print('started stimulation...')
                 self.start_stimulation_flag = True
                 self.odin_obj.send_start_sequence()  # send start bit to odin
+                self.update_channel_enable()  # send a channel enable that is the current prediction
                 saving_file = Saving()
 
             # start classifying when data in ring queue has enough data
@@ -78,6 +83,20 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.start_stimulation_flag = False
                 self.odin_obj.send_stop_sequence()  # send stop bit to odin
 
+            if not self.flag_reset and self.pin_reset_obj.input_GPIO():  # reload parameters
+                self.flag_reset = True
+                self.thresholds = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
+                self.odin_obj.get_coefficients()
+                self.odin_obj.send_parameters()
+                time.sleep(0.04)
+                self.update_channel_enable()
+                print('thresholds have been reset...')
+                print(self.thresholds)
+
+            if self.flag_reset and not self.pin_reset_obj.input_GPIO():
+                self.flag_reset = False
+                print('reset flag changed to False...')
+
     def load_classifier(self):
         filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier'))
 
@@ -99,8 +118,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         if prediction_changed_flag:
             if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
-                self.odin_obj.channel_enable = self.prediction
-                command = self.odin_obj.send_channel_enable()
+                command = self.update_channel_enable()
                 print('sending command to odin...')
                 print(command)
                 # print(self.odin_obj.amplitude)
@@ -110,6 +128,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 return [0, 0]
         else:
             return [0, 0]
+
+    def update_channel_enable(self):
+        self.odin_obj.channel_enable = self.prediction
+        command = self.odin_obj.send_channel_enable()
+        return command
 
     def classify_features(self, channel_i, data):
         features = self.extract_features(data)
