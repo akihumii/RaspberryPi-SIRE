@@ -85,9 +85,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     command_temp = self.classify()  # do the prediction and the display it
 
                     if not self.flag_save_new:
-                        command_array = np.zeros([np.size(self.data, 0), 3])  # create an empty command array
-                        command_array[0, 0:2] = command_temp  # replace the first row & first and second column with [address, value]
-                        command_array[:, 2] = self.prediction  # replace the third column with the current prediction
+                        command_array = np.zeros([np.size(self.data, 0), 7])  # create an empty command array
+                        command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
+                        command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
+                        command_array[:, 3:7] = self.odin_obj.amplitude
 
                         counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
