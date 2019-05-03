@@ -9,7 +9,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_reset_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
+    def __init__(self, odin_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
@@ -41,9 +41,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.pin_reset_obj = pin_reset_obj
 
+        self.pin_save_obj = pin_save_obj
+        self.saving_file = Saving()
+
         self.start_classify_flag = False
         self.start_stimulation_flag = False
         self.flag_reset = False
+        self.flag_save_new = False
 
     def run(self):
         self.setup()  # setup GPIO/serial classification display output
@@ -51,12 +55,22 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         print('started classification thread...')
         while True:
+            if not self.flag_save_new and self.pin_save_obj.input_GPIO():  # start a new file to save
+                self.saving_file = Saving()
+                self.flag_save_new = True
+                print('stop saving...')
+                time.sleep(0.1)
+
+            if self.flag_save_new and not self.pin_save_obj.input_GPIO():
+                self.flag_save_new = False
+                print('resume saving with a new file...')
+                time.sleep(0.1)
+
             if not self.start_stimulation_flag and self.process_obj.input_GPIO():  # send starting sequence to stimulator
                 print('started stimulation...')
                 self.start_stimulation_flag = True
                 self.odin_obj.send_start_sequence()  # send start bit to odin
                 self.update_channel_enable()  # send a channel enable that is the current prediction
-                saving_file = Saving()
 
             # start classifying when data in ring queue has enough data
             if not self.start_classify_flag:
@@ -68,15 +82,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 # self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
 
                 if self.start_classify_flag:
-                    command_temp = self.classify()  # do the prediction and the output
+                    command_temp = self.classify()  # do the prediction and the display it
 
-                    command_array = np.zeros([np.size(self.data, 0), 2])  # create an empty command array
-                    command_array[0, :] = command_temp
+                    if not self.flag_save_new:
+                        command_array = np.zeros([np.size(self.data, 0), 3])  # create an empty command array
+                        command_array[0, 0:2] = command_temp  # replace the first row & first and second column with [address, value]
+                        command_array[:, 2] = self.prediction  # replace the third column with the current prediction
 
-                    counter = self.data[:, 11][np.newaxis].T  # get the vertical matrix of counter
+                        counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
-                    if self.start_stimulation_flag:
-                        saving_file.save(np.append(counter, command_array, axis=1), "a")  # save the counter and the command
+                        self.saving_file.save(np.hstack([counter, command_array]), "a")  # save the counter and the command
 
             if self.start_stimulation_flag and not self.process_obj.input_GPIO():  # send ending sequence to setimulator
                 print('stopped stimulation...')
@@ -118,7 +133,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             except ValueError:
                 print('prediction failed...')
 
-        if prediction_changed_flag:
+        if prediction_changed_flag:  # send command when there is a change in prediction
             if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
                 command = self.update_channel_enable()
                 print('sending command to odin...')
