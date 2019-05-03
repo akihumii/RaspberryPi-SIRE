@@ -31,7 +31,7 @@ PIN_LED = [[18, 4],
 
 FEATURES_ID = [5, 7]
 PIN_OFF = 24
-PIN_RESET = 4
+PIN_RESET = 16
 PIN_SAVE = 21
 FLAG_RESET = False
 METHOD_IO = 'GPIO'  # METHOD for output display
