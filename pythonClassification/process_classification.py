@@ -92,10 +92,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.update_channel_enable()
                 print('thresholds have been reset...')
                 print(self.thresholds)
+                time.sleep(0.1)
 
             if self.flag_reset and not self.pin_reset_obj.input_GPIO():
                 self.flag_reset = False
                 print('reset flag changed to False...')
+                time.sleep(0.1)
 
     def load_classifier(self):
         filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier'))
