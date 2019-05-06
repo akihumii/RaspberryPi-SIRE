@@ -44,6 +44,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.pin_save_obj = pin_save_obj
         self.saving_file = Saving()
 
+        self.start_stimulation_address = 111
+        self.stop_stimulation_address = 222
+        self.start_stimulation_initial = False
+        self.stop_stimulation_initial = False
+
         self.stop_event = stop_event
 
         self.start_classify_flag = False
@@ -70,7 +75,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
             if not self.start_stimulation_flag and self.process_obj.input_GPIO():  # send starting sequence to stimulator
                 print('started stimulation...')
-                self.start_stimulation_flag = True
+                self.start_stimulation_flag = True  # start the stimulation
+                self.start_stimulation_initial = True  # to insert initial flag in saved file
                 self.odin_obj.send_start_sequence()  # send start bit to odin
                 self.update_channel_enable()  # send a channel enable that is the current prediction
 
@@ -89,8 +95,18 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     if not self.flag_save_new:
                         command_array = np.zeros([np.size(self.data, 0), 7])  # create an empty command array
                         command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
+                        if self.start_stimulation_initial:
+                            command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
+                            self.start_stimulation_initial = False
+                        elif self.stop_stimulation_initial:
+                            command_array[1, 0] = self.stop_stimulation_address  # replace the second row first column with starting address
+                            self.stop_stimulation_initial = False
+
                         command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
-                        command_array[:, 3:7] = self.odin_obj.amplitude
+                        if self.start_stimulation_flag:
+                            command_array[:, 3:7] = self.odin_obj.amplitude
+                        else:
+                            command_array[:, 3:7] = 0
 
                         counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
@@ -99,6 +115,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if self.start_stimulation_flag and not self.process_obj.input_GPIO():  # send ending sequence to setimulator
                 print('stopped stimulation...')
                 self.start_stimulation_flag = False
+                self.stop_stimulation_initial = True
                 self.odin_obj.send_stop_sequence()  # send stop bit to odin
 
             if not self.flag_reset and self.pin_reset_obj.input_GPIO():  # reload parameters
