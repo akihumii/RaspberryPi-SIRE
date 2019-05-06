@@ -48,16 +48,16 @@ LP_THRESH = 0
 NOTCH_THRESH = 50
 
 if __name__ == "__main__":
-    process_obj = ConfigGPIO(PIN_STIM, 'in')
-    process_obj.setup_GPIO()
+    pin_stim_obj = ConfigGPIO(PIN_STIM, 'in')
+    pin_stim_obj.setup_GPIO()
 
-    pin_reset_obj = ConfigGPIO(PIN_RESET, 'in')
+    pin_reset_obj = ConfigGPIO(PIN_RESET, 'in', pull_up_down='up')
     pin_reset_obj.setup_GPIO()
 
-    pin_save_obj = ConfigGPIO(PIN_SAVE, 'in')
+    pin_save_obj = ConfigGPIO(PIN_SAVE, 'in', pull_up_down='up')
     pin_save_obj.setup_GPIO()
 
-    pin_off_obj = ConfigGPIO(PIN_OFF, 'in')
+    pin_off_obj = ConfigGPIO(PIN_OFF, 'in', pull_up_down='up')
     pin_off_obj.setup_GPIO()
 
     count = 1
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pin_reset_obj, pin_save_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, process_obj, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pin_reset_obj, pin_save_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, stop_event)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 

@@ -9,7 +9,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj, stop_event):
+    def __init__(self, odin_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, stop_event):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
@@ -20,7 +20,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.ring_event = ring_event
         self.ring_queue = ring_queue
         self.features_id = features_id
-        self.process_obj = process_obj
+        self.pin_stim_obj = pin_stim_obj
 
         method_classify_all = {
             'features': self.classify_features,
@@ -73,7 +73,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 print('resume saving with a new file...')
                 time.sleep(0.1)
 
-            if not self.start_stimulation_flag and self.process_obj.input_GPIO():  # send starting sequence to stimulator
+            if not self.start_stimulation_flag and self.pin_stim_obj.input_GPIO():  # send starting sequence to stimulator
                 print('started stimulation...')
                 self.start_stimulation_flag = True  # start the stimulation
                 self.start_stimulation_initial = True  # to insert initial flag in saved file
@@ -112,7 +112,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
                         self.saving_file.save(np.hstack([counter, command_array]), "a")  # save the counter and the command
 
-            if self.start_stimulation_flag and not self.process_obj.input_GPIO():  # send ending sequence to setimulator
+            if self.start_stimulation_flag and not self.pin_stim_obj.input_GPIO():  # send ending sequence to setimulator
                 print('stopped stimulation...')
                 self.start_stimulation_flag = False
                 self.stop_stimulation_initial = True

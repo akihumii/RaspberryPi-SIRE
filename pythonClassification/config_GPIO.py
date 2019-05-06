@@ -3,9 +3,10 @@ import numpy as np
 
 
 class ConfigGPIO:
-    def __init__(self, pin, mode):
+    def __init__(self, pin, mode, pull_up_down='down'):
         self.pin = pin
         self.mode = mode
+        self.pull_up_down = pull_up_down
 
     def output_GPIO(self, data):
         for i in range(4):
@@ -40,5 +41,10 @@ class ConfigGPIO:
             GPIO.setup(x, GPIO.OUT)
 
     def __setup_in(self):
+        switcher_pull_up_down = {
+            'up': GPIO.PUD_UP,
+            'down': GPIO.PUD_DOWN
+        }
+
         for x in np.reshape(self.pin, np.size(self.pin)):
-            GPIO.setup(x, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+            GPIO.setup(x, GPIO.IN, pull_up_down=switcher_pull_up_down.get(self.pull_up_down))
