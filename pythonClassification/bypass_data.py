@@ -4,11 +4,12 @@ import copy
 
 
 class BypassData(multiprocessing.Process):
-    def __init__(self, tcp_ip_obj, raw_buffer_event, raw_buffer_queue):
+    def __init__(self, tcp_ip_obj, raw_buffer_event, raw_buffer_queue, stop_event):
         multiprocessing.Process.__init__(self)
         self.tcp_ip_obj = tcp_ip_obj
         self.raw_buffer_event = raw_buffer_event
         self.raw_buffer_queue = raw_buffer_queue
+        self.stop_event = stop_event
 
     def run(self):
         print('started bypassing thread...')
@@ -29,12 +30,20 @@ class BypassData(multiprocessing.Process):
                         data = self.raw_buffer_queue.get()
                         broken_status = client_socket_obj.send(data)
 
+                    if self.stop_event.is_set():
+                        break
+
                 client_socket_obj.close()
                 self.raw_buffer_event.clear()  # stop inserting buffer
 
                 count = 0
 
             count += 1
+
+            if self.stop_event.is_set():
+                break
+
+        print('data bypassing thread has stopped...')
 
 
 

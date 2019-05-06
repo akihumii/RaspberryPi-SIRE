@@ -9,7 +9,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj):
+    def __init__(self, odin_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, process_obj, stop_event):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
@@ -43,6 +43,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.pin_save_obj = pin_save_obj
         self.saving_file = Saving()
+
+        self.stop_event = stop_event
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
@@ -114,6 +116,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.flag_reset = False
                 print('reset flag changed to False...')
                 time.sleep(0.1)
+
+            if self.stop_event.is_set():
+                break
+
+        print('classify thread has stopped...')
 
     def load_classifier(self):
         filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier'))
