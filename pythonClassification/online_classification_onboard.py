@@ -31,10 +31,11 @@ PIN_LED = [[18, 4],
            [6, 13]]
 
 FEATURES_ID = [5, 7]
-PIN_STIM = 24  # high to start sending command to stimulator
-PIN_RESET = 12  # high to reset the parameters and send the updated command to stimulator
-PIN_SAVE = 16  # high to stop saving and low to start a new csv file to save the counter and stimulation command
-PIN_OFF = 21  # high to close all ports and objects, low to start running the program again
+PIN_STIM = 24  # HIGH to start sending command to stimulator
+PIN_SM_CHANNEL = 25  # HIGH for multi-channel classification; LOW for single-channel classification
+PIN_RESET = 12  # HIGH to reset the parameters and send the updated command to stimulator
+PIN_SAVE = 16  # HIGH to stop saving; LOW to start a new csv file to save the counter and stimulation command
+PIN_OFF = 21  # HIGH to close all ports and objects; LOW to start running the program again
 METHOD_IO = 'GPIO'  # METHOD for output display
 METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
 THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
@@ -50,6 +51,9 @@ NOTCH_THRESH = 50
 if __name__ == "__main__":
     pin_stim_obj = ConfigGPIO(PIN_STIM, 'in')
     pin_stim_obj.setup_GPIO()
+
+    pin_sm_channel_obj = ConfigGPIO(PIN_SM_CHANNEL, 'in', pull_up_down='up')
+    pin_sm_channel_obj.setup_GPIO()
 
     pin_reset_obj = ConfigGPIO(PIN_RESET, 'in', pull_up_down='up')
     pin_reset_obj.setup_GPIO()
@@ -91,7 +95,7 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pin_reset_obj, pin_save_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, stop_event)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 
