@@ -179,9 +179,12 @@ void verifyCounter(){
             counter = (counter + 2) % 256;
             counterIndex += 16;
         }
-        else{
+        else if (data_stream->getBitMode() == BITMODE_5){
             counter = (counter + 2) % 32;
             counterIndex += 32;
+        }
+        else{
+            return;
         }
     }
     counterIndex = counterIndex % BUFFER_SIZE;
@@ -272,26 +275,10 @@ void sendCmd(){
     }
 }
 
-void resolveCmd(){
-    recv_count = recv(client_sock, &recvbuffer, 32, 0);
-    if(recv_count > 0){
-        data_stream->setClockTuneMode(false);
-        setupCmdSettings();
-        sendCmd();
-    }
-    else{
-        //TODO: err read cmd
-    }
-}
-
 void storeData(){
     data_stream->SafeRead(parallelbuffer, BUFFER_SIZE);
 
-    // if (data_stream->getBitMode() == BITMODE_5){
-    //     return;
-    // }
-
-    // verifyCounter();
+    verifyCounter();
 
     pthread_mutex_lock(&lock1);
     rb->write(parallelbuffer, BUFFER_SIZE);
@@ -368,9 +355,12 @@ void *sendWiFi(void *arg){
 
 void *recvWiFi(void *arg){
     while(1){
-        if(client_sock > 0){
+        recv_count = recv(client_sock, &recvbuffer, 32, 0);
+        if(recv_count > 0){
             pthread_mutex_lock(&lock2);
-            resolveCmd();
+            data_stream->setClockTuneMode(false);
+            setupCmdSettings();
+            sendCmd();
             pthread_mutex_unlock(&lock2);
         }
     }
