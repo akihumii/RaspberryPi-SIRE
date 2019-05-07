@@ -9,7 +9,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, stop_event):
+    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, stop_event):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
@@ -21,6 +21,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.ring_queue = ring_queue
         self.features_id = features_id
         self.pin_stim_obj = pin_stim_obj
+        self.pin_sm_channel_obj = pin_sm_channel_obj
 
         method_classify_all = {
             'features': self.classify_features,
@@ -34,6 +35,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.data = []
         self.channel_decode = []
+        self.channel_decode_default = np.array([4, 5, 6, 7])
         self.saving_file_all = Saving()
 
         self.odin_obj = odin_obj
@@ -53,6 +55,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
+        self.flag_multi_channel = False
         self.flag_reset = False
         self.flag_save_new = False
 
@@ -62,23 +65,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         print('started classification thread...')
         while True:
-            if not self.flag_save_new and self.pin_save_obj.input_GPIO():  # start a new file to save
-                self.saving_file = Saving()
-                self.flag_save_new = True
-                print('stop saving...')
-                time.sleep(0.1)
-
-            if self.flag_save_new and not self.pin_save_obj.input_GPIO():
-                self.flag_save_new = False
-                print('resume saving with a new file...')
-                time.sleep(0.1)
-
-            if not self.start_stimulation_flag and self.pin_stim_obj.input_GPIO():  # send starting sequence to stimulator
-                print('started stimulation...')
-                self.start_stimulation_flag = True  # start the stimulation
-                self.start_stimulation_initial = True  # to insert initial flag in saved file
-                self.odin_obj.send_start_sequence()  # send start bit to odin
-                self.update_channel_enable()  # send a channel enable that is the current prediction
+            self.check_saving_flag()
+            self.check_stimulation_flag()
+            self.check_reset_flag()
+            self.check_classify_dimension()
 
             # start classifying when data in ring queue has enough data
             if not self.start_classify_flag:
@@ -111,52 +101,101 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                         counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
                         self.saving_file.save(np.hstack([counter, command_array]), "a")  # save the counter and the command
-
-            if self.start_stimulation_flag and not self.pin_stim_obj.input_GPIO():  # send ending sequence to setimulator
-                print('stopped stimulation...')
-                self.start_stimulation_flag = False
-                self.stop_stimulation_initial = True
-                self.odin_obj.send_stop_sequence()  # send stop bit to odin
-
-            if not self.flag_reset and self.pin_reset_obj.input_GPIO():  # reload parameters
-                self.flag_reset = True
-                self.thresholds = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
-                self.odin_obj.get_coefficients()
-                self.odin_obj.send_parameters()
-                time.sleep(0.04)
-                self.update_channel_enable()
-                print('thresholds have been reset...')
-                print(self.thresholds)
-                time.sleep(0.1)
-
-            if self.flag_reset and not self.pin_reset_obj.input_GPIO():
-                self.flag_reset = False
-                print('reset flag changed to False...')
-                time.sleep(0.1)
-
             if self.stop_event.is_set():
                 break
-
         print('classify thread has stopped...')
 
+    def check_classify_dimension(self):
+        if not self.flag_multi_channel and self.pin_sm_channel_obj.input_GPIO():  # switch to multi-channel classification
+            self.flag_multi_channel = True
+            time.sleep(0.1)
+            self.load_classifier()
+            print('switched to multi-channel classification mode...')
+
+        if self.flag_multi_channel and not self.pin_sm_channel_obj.input_GPIO():  # switch to single-channel classification
+            self.flag_multi_channel = False
+            time.sleep(0.1)
+            self.load_classifier()
+            print('switch to single-channel classification mode...')
+
+    def check_reset_flag(self):
+        if not self.flag_reset and self.pin_reset_obj.input_GPIO():  # reload parameters
+            self.flag_reset = True
+            self.thresholds = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
+            self.odin_obj.get_coefficients()
+            self.odin_obj.send_parameters()
+            time.sleep(0.04)
+            self.update_channel_enable()
+            print('thresholds have been reset...')
+            print(self.thresholds)
+            time.sleep(0.1)
+
+        if self.flag_reset and not self.pin_reset_obj.input_GPIO():
+            self.flag_reset = False
+            print('reset flag changed to False...')
+            time.sleep(0.1)
+
+    def check_stimulation_flag(self):
+        if not self.start_stimulation_flag and self.pin_stim_obj.input_GPIO():  # send starting sequence to stimulator
+            print('started stimulation...')
+            self.start_stimulation_flag = True  # start the stimulation
+            self.start_stimulation_initial = True  # to insert initial flag in saved file
+            self.odin_obj.send_start_sequence()  # send start bit to odin
+            self.update_channel_enable()  # send a channel enable that is the current prediction
+
+        if self.start_stimulation_flag and not self.pin_stim_obj.input_GPIO():  # send ending sequence to setimulator
+            print('stopped stimulation...')
+            self.start_stimulation_flag = False
+            self.stop_stimulation_initial = True
+            self.odin_obj.send_stop_sequence()  # send stop bit to odin
+
+    def check_saving_flag(self):
+        if not self.flag_save_new and self.pin_save_obj.input_GPIO():  # start a new file to save
+            self.saving_file = Saving()
+            self.flag_save_new = True
+            print('stop saving...')
+            time.sleep(0.1)
+
+        if self.flag_save_new and not self.pin_save_obj.input_GPIO():
+            self.flag_save_new = False
+            print('resume saving with a new file...')
+            time.sleep(0.1)
+
     def load_classifier(self):
-        filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier'))
-
-        self.channel_decode = [x[x.find('Ch')+2] for x in filename]
-
-        self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
+        if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
+            filename = sorted(x for x in os.listdir('classificationTmp') if x.endswith('Cha.sav'))
+            # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
+            self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
+        else:  # single-channel classification
+            filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
+            self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
+            self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
+        print('loaded classifier...')
+        print(filename)
 
     def classify(self):
         prediction_changed_flag = False
-        for i, x in enumerate(self.channel_decode):
-            try:
-                prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-                if prediction != (self.prediction >> i & 1):  # if prediction changes
-                    self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
+        if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
+            # try:
+                prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
+                if prediction != self.prediction:  # if prediction changes
+                    for i in range(self.odin_obj.num_channel):
+                        self.output(i, prediction, self.prediction)  # function of classification_decision
                     prediction_changed_flag = True
+                self.prediction = prediction
 
-            except ValueError:
-                print('prediction failed...')
+            # except ValueError:
+            #     print('prediction failed...')
+        else:
+            for i, x in enumerate(self.channel_decode):
+                try:
+                    prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+                    if prediction != (self.prediction >> i & 1):  # if prediction changes
+                        self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
+                        prediction_changed_flag = True
+
+                except ValueError:
+                    print('prediction failed...')
 
         if prediction_changed_flag:  # send command when there is a change in prediction
             if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
@@ -178,12 +217,19 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def classify_features(self, channel_i, data):
         features = self.extract_features(data)
-        prediction = self.clf[channel_i].predict([features]) - 1
+        if channel_i == 'all':  # for the case of multi-channel decoding
+            prediction = self.clf.predict([features]) - 1
+        else:
+            prediction = self.clf[channel_i].predict([features]) - 1
         return prediction
 
     def classify_thresholds(self, channel_i, data):
-        prediction = data >= self.thresholds[channel_i]
-        prediction = any(prediction)
+        if channel_i == 'all':  # for the case of multi-channel decoding
+            prediction = data >= self.thresholds
+            prediction = prediction.any()
+        else:
+            prediction = data >= self.thresholds[channel_i]
+            prediction = any(prediction)
         return int(prediction)
 
     def extract_features(self, data):
