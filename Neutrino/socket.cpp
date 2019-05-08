@@ -22,6 +22,7 @@
 #define BUFFER_SIZE 160
 #define BUFFER_SIZE_2 3200
 #define SOCKET_SERVER_PORT 8888
+#define FPGA_CLOCK_SPEED 19200
 
 INITIALIZE_EASYLOGGINGPP
 
@@ -30,33 +31,27 @@ int sync_len = 0, syncIndex = 0;
 
 struct sockaddr_in server, client, odin_addr;
 
-unsigned char parallelbuffer[BUFFER_SIZE];
-unsigned char readbuffer[BUFFER_SIZE];
-unsigned char writebuffer[BUFFER_SIZE_2];
-unsigned char recvbuffer[32];
-unsigned char sync_buf[32];
+unsigned char buf_in[BUFFER_SIZE];
+unsigned char buf_out[BUFFER_SIZE_2];
+unsigned char buf_cmd[32];
+unsigned char buf_sync[BUFFER_SIZE];
+unsigned char buf_sync_cmd[32];
 
 bool read_bool = 0;
-
 int recv_count = 0;
 
 bool isFrDetected = false;
 uint8_t counter = 0;
 int counterIndex = 0;
 
-bool isFrDetected2 = false;
-uint8_t counter2 = 0;
-int counterIndex2 = 0;
-
-
 WiringPiSerial *fd;
 ParallelGPIO *data_stream;
 
-ringbuffer<uint8_t> *rb;
-ringbuffer<uint8_t> *rb_parallel;
+ringbuffer<uint8_t> *rb_wifi;
+ringbuffer<uint8_t> *rb_sync;
 
 pthread_t tid[4];
-pthread_mutex_t lock1, lock2;
+pthread_mutex_t lock_rb_wifi, lock_data;
 
 BITMODE selectedMode = BITMODE_8;
 
@@ -77,6 +72,16 @@ static int findSyncPulse(unsigned char* buf, int len){
         }
     }
     return -1;
+}
+
+void slotSyncPulse(){
+    syncIndex = findSyncPulse(buf_sync, BUFFER_SIZE);
+    if(syncIndex != -1){
+        buf_sync[syncIndex] = 255;
+        sync_len = 0;
+        syncIndex = -1;
+        memset(buf_sync_cmd, '\0', 32);
+    }
 }
 
 static void acceptConnection(void){
@@ -144,97 +149,23 @@ static void waitForSylph(void){
     acceptConnection();
 }
 
-void initParallelTask(){
+void initRecvDataParam(){
     data_stream = new ParallelGPIO();
     data_stream->Init();
     data_stream->resetFPGA();
-    fd = new WiringPiSerial("/dev/serial0", 19200);
+    fd = new WiringPiSerial("/dev/serial0", FPGA_CLOCK_SPEED);
     fd->Init();
     recv_count = 0;
 }
 
-void verifyCounter(){
-    if (isFrDetected == false){
-        if (data_stream->getBitMode() == BITMODE_8){
-            counterIndex = findSyncPulse(parallelbuffer, BUFFER_SIZE) - 3;
-        }
-        else{
-            counterIndex = findSyncPulse(parallelbuffer, BUFFER_SIZE) - 7;
-        }
-
-        if (counterIndex != -1){
-            counter = parallelbuffer[counterIndex];
-            isFrDetected = true;
-        }
-    }
-
-    while(counterIndex < BUFFER_SIZE){
-        if (counter != parallelbuffer[counterIndex]){
-            printf("err counter index read: %d %d\n", counter, parallelbuffer[counterIndex]);
-            isFrDetected = false;
-            // break;
-        }
-
-        if (data_stream->getBitMode() == BITMODE_8){
-            counter = (counter + 2) % 256;
-            counterIndex += 16;
-        }
-        else if (data_stream->getBitMode() == BITMODE_5){
-            counter = (counter + 2) % 32;
-            counterIndex += 32;
-        }
-        else{
-            return;
-        }
-    }
-    counterIndex = counterIndex % BUFFER_SIZE;
-
-    if (!isFrDetected){
-        for (int i = 0; i < BUFFER_SIZE; i ++){
-            printf("%d ", parallelbuffer[i]);
-        }
-        printf("\n ");
-    }
-
-}
-
-void verifyCounter2(){
-    counterIndex2 = findSyncPulse(writebuffer, BUFFER_SIZE_2) - 3;
-
-    if (!isFrDetected2 && counterIndex2 != -1){
-        counter2 = writebuffer[counterIndex2];
-        isFrDetected2 = true;
-    }
-
-    while(counterIndex2 < BUFFER_SIZE_2 && isFrDetected2 == true){
-        if (counter2 != writebuffer[counterIndex2]){
-            printf("err count index wifi: %d %d\n", counter2, writebuffer[counterIndex2]);
-            isFrDetected2 = false;
-            break;
-        }
-        counter2 = (counter2 + 2) % 256;
-        counterIndex2 += 16;
-    }
-    counterIndex2 -= BUFFER_SIZE_2;
-
-    if (!isFrDetected2){
-        for (int i = 0; i < BUFFER_SIZE_2; i ++){
-            printf("%d ", writebuffer[i]);
-        }
-        printf("\n ");
-    }
-
-}
-
-
 void setupCmdSettings(){
-    switch(recvbuffer[6]){
+    switch(buf_cmd[6]){
         case 180:
         case 181:
         case 229:
             data_stream->resetFPGA();
-            rb->resetBuffer();
-            rb_parallel->resetBuffer();
+            rb_wifi->resetBuffer();
+            rb_sync->resetBuffer();
             read_bool = true;
             data_stream->setBitMode(BITMODE_5);
             break;
@@ -245,8 +176,8 @@ void setupCmdSettings(){
         case 101:
         case 21:
             data_stream->resetFPGA();
-            rb->resetBuffer();
-            rb_parallel->resetBuffer();
+            rb_wifi->resetBuffer();
+            rb_sync->resetBuffer();
             read_bool = true;
             data_stream->setBitMode(BITMODE_8);
             break;
@@ -258,171 +189,163 @@ void setupCmdSettings(){
 }
 
 void sendCmd(){
-    if(recvbuffer[0] == 50){
+    if(buf_cmd[0] == 50){
         fprintf(stdout, "Disconnect signal received!\n");
         close(client_sock);
         client_sock = -1;
         acceptConnection();
     }
     else{
-        if(fd->SimpleWrite(recvbuffer, recv_count) < 0){
+        if(fd->SimpleWrite(buf_cmd, recv_count) < 0){
             LOG(ERROR) << ", \"event\":\"Sending Command:\", \"errnum\":0, \"msg\":\"Command cannot be sent!" << "\"";
         }
         else{
             LOG(INFO) << ", \"event\":\"Sending Command:\", \"errnum\":0, \"msg\":\"Command Sent!\"";
         }
-        memset(recvbuffer, '\0', recv_count);
+        memset(buf_cmd, '\0', recv_count);
     }
+}
+
+bool verifyCounter(){
+    if (isFrDetected == false){
+        // findSyncPulse returns sync pulse index, so can calculate counter index based on that
+        if (data_stream->getBitMode() == BITMODE_8){
+            counterIndex = findSyncPulse(buf_in, BUFFER_SIZE) - 3;
+        }
+        else{
+            counterIndex = findSyncPulse(buf_in, BUFFER_SIZE) - 7;
+        }
+
+        if (counterIndex != -1){
+            counter = buf_in[counterIndex];
+            isFrDetected = true;
+        }
+        else {
+            return;
+        }
+    }
+
+    while(counterIndex < BUFFER_SIZE){
+        if (counter != buf_in[counterIndex]){
+            printf("err counter index read: %d %d\n", counter, buf_in[counterIndex]);
+            isFrDetected = false;
+            break;
+        }
+
+        if (data_stream->getBitMode() == BITMODE_8){
+            counter = (counter + 2) % 256;
+            counterIndex += 16;
+        }
+        else{
+            counter = (counter + 2) % 32;
+            counterIndex += 32;
+        }
+    }
+    counterIndex = counterIndex % BUFFER_SIZE;
+
+    if (!isFrDetected){
+        for (int i = 0; i < BUFFER_SIZE; i ++){
+            printf("%d ", buf_in[i]);
+        }
+        printf("\n ");
+    }
+
+    return isFrDetected;
+
 }
 
 void storeData(){
-    data_stream->SafeRead(parallelbuffer, BUFFER_SIZE);
-
-    verifyCounter();
-
-    pthread_mutex_lock(&lock1);
-    rb->write(parallelbuffer, BUFFER_SIZE);
-    // rb_parallel->write(parallelbuffer, BUFFER_SIZE);
-    pthread_mutex_unlock(&lock1);
-    memset(parallelbuffer, '\0', BUFFER_SIZE);
-}
-
-void slotSyncPulse(){
-    syncIndex = findSyncPulse(readbuffer, BUFFER_SIZE);
-    if(syncIndex != -1){
-        readbuffer[syncIndex] = 255;
-        sync_len = 0;
-        syncIndex = -1;
-        memset(sync_buf, '\0', 32);
+    pthread_mutex_lock(&lock_data);
+    data_stream->SafeRead(buf_in, BUFFER_SIZE);
+    pthread_mutex_unlock(&lock_data);
+    
+    // for debugging, use the following cond instead
+    // if ((verifyCounter()) && (rb_wifi->getFree() > BUFFER_SIZE+1)){
+    if (rb_wifi->getFree() > BUFFER_SIZE+1){
+        pthread_mutex_lock(&lock_rb_wifi);
+        rb_wifi->write(buf_in, BUFFER_SIZE);
+        pthread_mutex_unlock(&lock_rb_wifi);
     }
 }
 
-void *readParallel(void *arg){
-    initParallelTask();
+// FPGA -> internal buffer
+void *recvData(void *arg){
+    initRecvDataParam();
     while(1){
-        if(rb->getFree() < BUFFER_SIZE+1){
-            printf("buffer overflow, write\n");
-            while (rb->getFree() < BUFFER_SIZE+1){}
-        }
         if(read_bool){
-        pthread_mutex_lock(&lock2);
         storeData();
-        pthread_mutex_unlock(&lock2);
         }
-
     }
 }
 
+// find sync pulse from internal buffer
 void *readPacket(void *arg){
+    // minimal changes from original, logic-wise it wont work
+    // TODO: remove rb-wifi dependant, modify recv() usage for tcp-blocking
     while(1){
-        if(rb->getFree() > BUFFER_SIZE+1 && rb_parallel->getOccupied() > BUFFER_SIZE+1){
-            rb_parallel->read(readbuffer, BUFFER_SIZE);
+        if(rb_wifi->getFree() > BUFFER_SIZE+1 && rb_sync->getOccupied() > BUFFER_SIZE+1){
+            rb_sync->read(buf_sync, BUFFER_SIZE);
 
             if(sync_len <= 0){
-                sync_len = recv(odin_socket, &sync_buf, 32, MSG_DONTWAIT);
+                sync_len = recv(odin_socket, &buf_sync_cmd, 32, MSG_DONTWAIT);
             }
             if(sync_len > 0){
                 slotSyncPulse();
             }
-
-            // rb->write(readbuffer, BUFFER_SIZE);
-            memset(readbuffer, '\0', BUFFER_SIZE);
+            // rb_wifi->write(buf_sync, BUFFER_SIZE);
+            memset(buf_sync, '\0', BUFFER_SIZE);
         }
     }
 }
 
+// internal buffer -> wifi out
 void *sendWiFi(void *arg){
     while(1){
-        if(rb->getOccupied() > BUFFER_SIZE_2+1){
-            pthread_mutex_lock(&lock1);
-            int len = rb->read(writebuffer, BUFFER_SIZE_2);
-            if (len != BUFFER_SIZE_2){
-                printf("buffer overflow, read\n");
-            }
-            pthread_mutex_unlock(&lock1);
-
-            // verifyCounter2();
+        if(rb_wifi->getOccupied() > BUFFER_SIZE_2+1){
+            pthread_mutex_lock(&lock_rb_wifi);
+            rb_wifi->read(buf_out, BUFFER_SIZE_2);
+            pthread_mutex_unlock(&lock_rb_wifi);
 
             if(client_sock > 0){
-                if(write(client_sock, writebuffer, BUFFER_SIZE_2) < 0){
+                if(write(client_sock, buf_out, BUFFER_SIZE_2) < 0){
                     printf("wifi packet dropped.\n");
                 }
             }
-            memset(writebuffer, '\0', BUFFER_SIZE_2);
         }
     }
 }
 
+// wifi in -> FPGA
 void *recvWiFi(void *arg){
     while(1){
-        recv_count = recv(client_sock, &recvbuffer, 32, 0);
+        recv_count = recv(client_sock, &buf_cmd, 32, 0);
         if(recv_count > 0){
-            pthread_mutex_lock(&lock2);
+            pthread_mutex_lock(&lock_data);
             data_stream->setClockTuneMode(false);
             setupCmdSettings();
             sendCmd();
-            pthread_mutex_unlock(&lock2);
+            pthread_mutex_unlock(&lock_data);
         }
     }
 }
 
 int main(int argc, char *argv[]){
-    if(wiringPiSetup() == -1){
-        LOG(ERROR) << ", \"event\":\"wiringpi-Setup\", \"errnum\":0, \"msg\":\"Wiring Pi Setup Error!\"";
-        return -1;
-    }
-    LOG(INFO) << ", \"event\":\"wiringpi-Setup\", \"errnum\":0, \"msg\":\"Wiring Pi Setup Successful!\"";
+    // commented out useless logging for readablility, all of them should be running fine
+    // if there is any error, the program should terminate, cron log can be used to store that error
+    // wiringPiSetup() no longer returns anything valuable, see http://wiringpi.com/reference/setup/
 
-    rb = new ringbuffer<uint8_t>(BUFFER_SIZE_2 * 1000);
-    rb_parallel = new ringbuffer<uint8_t>(BUFFER_SIZE * 10);
-
-    // if(rb->getFree() < 0){
-    //     LOG(ERROR) << ", \"event\":\"Ring buffer initialisation\", \"errnum\":0, \"msg\":\"Ring buffer could not be created!\"";
-    // }
-    // LOG(INFO) << ", \"event\":\"Ring buffer initialisation\", \"errnum\":0, \"msg\":\"Ring buffer created!\"";
-
-    // if(rb_parallel->getFree() < 0){
-    //     LOG(ERROR) << ", \"event\":\"Ring buffer initialisation\", \"errnum\":0, \"msg\":\"Ring buffer could not be created!\"";
-    // }
-    // LOG(INFO) << ", \"event\":\"Ring buffer initialisation\", \"errnum\":0, \"msg\":\"Ring buffer created!\"";
-
-    // if (pthread_mutex_init(&lock1, NULL) != 0)
-    // {
-    //     LOG(ERROR) << ", \"event\":\"Mutex Initialisation\", \"errnum\":0, \"msg\":\"Mutex Initialisation Failed!\"";
-    //     return -1;
-    // }
-    // LOG(INFO) << ", \"event\":\"Mutex Initialisation\", \"errnum\":0, \"msg\":\"Mutex Initiation Successful!\"";
-
-    // if (pthread_mutex_init(&lock2, NULL) != 0)
-    // {
-    //     LOG(ERROR) << ", \"event\":\"Mutex Initialisation\", \"errnum\":0, \"msg\":\"Mutex Initialisation Failed!\"";
-    //     return -1;
-    // }
-    // LOG(INFO) << ", \"event\":\"Mutex Initialisation\", \"errnum\":0, \"msg\":\"Mutex Initiation Successful!\"";
-
-    pthread_mutex_init(&lock1, NULL);
-    pthread_mutex_init(&lock2, NULL);
-
+    wiringPiSetup();
+    rb_wifi = new ringbuffer<uint8_t>(BUFFER_SIZE_2 * 1000);    // ~3.2MB, overkill imo
+    rb_sync = new ringbuffer<uint8_t>(BUFFER_SIZE * 10);        // ~1.6KB, unused rn
+    pthread_mutex_init(&lock_rb_wifi, NULL);
+    pthread_mutex_init(&lock_data, NULL);
     // connectOdin();
     waitForSylph();
 
-    // if(pthread_create(&(tid[0]), NULL, &readPacket, NULL) < 0){
-    //     LOG(ERROR) << ", \"event\":\"Creating readPacket Thread:\", \"errnum\":0, \"msg\":\"Packet Thread could not be created!\"";
-    // }
-    // LOG(INFO) << ", \"event\":\"Creating readPacket Thread:\", \"errnum\":0, \"msg\":\"Packet Thread created!\"";
-
-    if(pthread_create(&(tid[2]), NULL, &sendWiFi, NULL) < 0){
-        LOG(ERROR) << ", \"event\":\"Creating WiFi Thread:\", \"errnum\":0, \"msg\":\"WiFi Thread could not be created!\"";
-    }
-    LOG(INFO) << ", \"event\":\"Creating WiFi Thread:\", \"errnum\":0, \"msg\":\"WiFi Thread created!\"";
+    pthread_create(&(tid[1]), NULL, &sendWiFi, NULL);
+    pthread_create(&(tid[1]), NULL, &recvWiFi, NULL);
+    pthread_create(&(tid[2]), NULL, &recvData, NULL);
     
-    pthread_create(&(tid[2]), NULL, &recvWiFi, NULL);
-
-    if(pthread_create(&(tid[1]), NULL, &readParallel, NULL) < 0){
-        LOG(ERROR) << ", \"event\":\"Creating Parallel Thread:\", \"errnum\":0, \"msg\":\"Parallel Thread could not be created!\"";
-    }
-    LOG(INFO) << ", \"event\":\"Creating Parallel Thread:\", \"errnum\":0, \"msg\":\"Parallel Thread created!\"";
-
     for(int i = 0; i < 3; i++){
         pthread_join(tid[i], NULL);
     }
