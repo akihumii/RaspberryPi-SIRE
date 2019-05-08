@@ -1,0 +1,9 @@
+for stable low data drop:
+additional software changes required: 
+1. isolate core 1 & 2 via `isolcpus =`
+2. change from service boot up to cron -> bash script-> program
+script:
+`sudo taskset -c 1,2 nice -n -10 ./neutrino`
+
+additional hardware changes required:
+1.  ensure RPi has enough power (no blinking PWR LED)
