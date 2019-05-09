@@ -9,7 +9,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, stop_event):
+    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
@@ -51,7 +51,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.start_stimulation_initial = False
         self.stop_stimulation_initial = False
 
+        self.change_parameter_queue = change_parameter_queue
+        self.change_parameter_event = change_parameter_event
         self.stop_event = stop_event
+
+        self.address = {
+            0xF1: self.update_amplitude,
+            0xF2: self.update_amplitude,
+            0xF3: self.update_amplitude,
+            0xF4: self.update_amplitude,
+            0xF5: self.update_frequency,
+            0xF6: self.update_pulse_duration,
+            0xF7: self.update_pulse_duration,
+            0xF9: self.update_pulse_duration,
+            0xFA: self.update_pulse_duration,
+        }
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
@@ -69,6 +83,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.check_stimulation_flag()
             self.check_reset_flag()
             self.check_classify_dimension()
+            self.check_change_parameter()
 
             # start classifying when data in ring queue has enough data
             if not self.start_classify_flag:
@@ -83,7 +98,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     command_temp = self.classify()  # do the prediction and the display it
 
                     if not self.flag_save_new:
-                        command_array = np.zeros([np.size(self.data, 0), 7])  # create an empty command array
+                        command_array = np.zeros([np.size(self.data, 0), 12])  # create an empty command array
                         command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
                         if self.start_stimulation_initial:
                             command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
@@ -95,8 +110,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                         command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
                         if self.start_stimulation_flag:
                             command_array[:, 3:7] = self.odin_obj.amplitude
+                            command_array[:, 7:11] = self.odin_obj.pulse_duration
+                            command_array[:, 11] = self.odin_obj.frequency
                         else:
-                            command_array[:, 3:7] = 0
+                            command_array[:, 3:11] = 0
 
                         counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
@@ -104,6 +121,48 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if self.stop_event.is_set():
                 break
         print('classify thread has stopped...')
+
+    def update_frequency(self, data):
+        self.odin_obj.frequency = data[1]
+        self.odin_obj.send_frequency()
+        print('updated frequency...')
+        print(data)
+        time.sleep(0.04)
+
+    def update_amplitude(self, data):
+        address = {
+            0xF1: 0,
+            0xF2: 1,
+            0xF3: 2,
+            0xF4: 3
+        }
+        channel_id = address.get(data[0])
+        self.odin_obj.amplitude[channel_id] = data[1]
+        self.odin_obj.send_amplitude(channel_id)
+        print('updated amplitude...')
+        print(data)
+        time.sleep(0.04)
+
+    def update_pulse_duration(self, data):
+        address = {
+            0xF6: 0,
+            0xF7: 1,
+            0xF9: 2,
+            0xFA: 3
+        }
+        channel_id = address.get(data[0])
+        self.odin_obj.pulse_duration[channel_id] = data[1]
+        self.odin_obj.send_pulse_duration(channel_id)
+        print('updated pulse duration...')
+        print(data)
+        time.sleep(0.04)
+
+    def check_change_parameter(self):
+        if self.change_parameter_event.is_set():
+            while not self.change_parameter_queue.empty():
+                data_parameter = self.change_parameter_queue.get()
+                self.address.get(data_parameter[0])(data_parameter)
+                self.change_parameter_event.clear()
 
     def check_classify_dimension(self):
         if not self.flag_multi_channel and self.pin_sm_channel_obj.input_GPIO():  # switch to multi-channel classification

@@ -118,7 +118,7 @@ class CommandOdin:
         return output
 
     def _convert_to_char(self, data):
-        output = [chr(x) for x in data]
+        output = [chr(int(x)) for x in data]
         output = ''.join(output)
         return output
 
