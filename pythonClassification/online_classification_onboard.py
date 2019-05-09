@@ -21,7 +21,7 @@ PORT_GUI = 8000
 PORT_STIMULATOR = 0
 
 BUFFER_SIZE = 25 * 65  # about 50 ms
-BUFFER_SIZE_SENDING = 1  # buffer size to send data to socket
+BUFFER_SIZE_SENDING = 2  # buffer size to send data to socket
 RINGBUFFER_SIZE = 40960
 CHANNEL_LEN = 10
 CHANNEL_DECODE = [4, 5, 6, 7]

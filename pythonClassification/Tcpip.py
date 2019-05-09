@@ -46,21 +46,29 @@ class TcpIp:
         num_bytes_recorded = 0
         buffer_read = np.array([], dtype=np.uint8)
         buffer_raw = ''
+        count = 1
         while num_bytes_recorded < self.buffer_size:
             try:
                 buffer_part = self.socket_obj.recv(self.buffer_size - num_bytes_recorded)
-            except socket.timeout:
-                print("Data receive timeout...")
+            except (socket.timeout, IOError), e:
+                if e.errno != errno.EWOULDBLOCK:
+                    print("Data receive timeout...")
                 break
 
-            if buffer_part == '':
+            if not buffer_part:
                 print('Not received anything...')
-                sleep(1)
+                # sleep(1)
             else:
                 buffer_raw = np.append(buffer_raw, buffer_part)
                 buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=np.uint8))
 
                 num_bytes_recorded = num_bytes_recorded + len(buffer_part)
+
+            count += 1
+
+            if count == 3 and not buffer_part and not buffer_part:
+                print('break receiving now...')
+                break
 
         return np.append(buffer_leftover, buffer_read), ''.join(buffer_raw)
 

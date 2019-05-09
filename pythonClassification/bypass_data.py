@@ -20,15 +20,23 @@ class BypassData(multiprocessing.Process):
 
             if client_socket:  # successfully connected
                 self.raw_buffer_event.set()  # to insert data into raw_buffer_queue
-                client_socket_obj = copy.copy(self.tcp_ip_obj)
+                client_socket_obj = copy.deepcopy(self.tcp_ip_obj)
                 client_socket_obj.socket_obj = client_socket
+                client_socket_obj.socket_obj.setblocking(False)
                 print('accepted client...')
 
                 broken_status = 0
                 while not broken_status:  # stop sending when the pipe broke
-                    if not self.raw_buffer_queue.empty():
+                    if not self.raw_buffer_queue.empty():  # send data to client
                         data = self.raw_buffer_queue.get()
                         broken_status = client_socket_obj.send(data)
+
+                    # print('reading from client socket...')
+                    data_recv = client_socket_obj.read([])[0]
+                    if len(data_recv) > 0:
+                        if len(data_recv) == 1:
+                            data_recv = np.append(data_recv, 0)
+                        print(data_recv)
 
                     if self.stop_event.is_set():
                         break
