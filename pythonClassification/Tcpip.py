@@ -59,7 +59,7 @@ class TcpIp:
                 print('Not received anything...')
                 # sleep(1)
             else:
-                buffer_raw = np.append(buffer_raw, buffer_part)
+                buffer_raw = ''.join([buffer_raw, buffer_part])
                 buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=np.uint8))
 
                 num_bytes_recorded = num_bytes_recorded + len(buffer_part)

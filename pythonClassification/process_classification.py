@@ -118,9 +118,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                         else:
                             command_array[:, 3:11] = 0
 
-                        counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
+                        # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
-                        self.saving_file.save(np.hstack([counter, command_array]), "a")  # save the counter and the command
+                        self.saving_file.save(np.hstack([self.data, command_array]), "a")  # save the counter and the command
             if self.stop_event.is_set():
                 break
         print('classify thread has stopped...')
