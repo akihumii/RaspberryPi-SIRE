@@ -69,8 +69,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xF7: self.update_pulse_duration,
             0xF9: self.update_pulse_duration,
             0xFA: self.update_pulse_duration,
-            0xFC: self.update_step_size
+            0xFC: self.update_step_size,
+            0xC9: self.update_threshold_upper,
+            0xCA: self.update_threshold_lower,
+            0xCB: self.update_debounce_delay
         }
+
+        self.stim_threshold_upper = 10
+        self.stim_threshold_lower = 10
+        self.stim_debounce_delay = 10
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
@@ -130,6 +137,24 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if self.stop_event.is_set():
                 break
         print('classify thread has stopped...')
+
+    def update_threshold_upper(self, data):
+        self.stim_threshold_upper = data[1]
+        print('updated upper threshold...')
+        print(data)
+        time.sleep(0.4)
+
+    def update_threshold_lower(self, data):
+        self.stim_threshold_lower = data[1]
+        print('updated lower threshold...')
+        print(data)
+        time.sleep(0.4)
+
+    def update_debounce_delay(self, data):
+        self.stim_debounce_delay = data[1]
+        print('updated debounce delay...')
+        print(data)
+        time.sleep(0.4)
 
     def update_step_size(self, data):
         self.odin_obj.step_size = data[1]
@@ -291,7 +316,6 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     print('prediction failed...')
 
         if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
-
                 if self.flag_closed_loop:  # closed-loop stimulation
                     command = self.odin_obj.send_step_size_increase()
                     print('sending command to odin...')
@@ -308,8 +332,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     else:
                         return [0, 0]
         else:
-            print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
-            # return [0, 0]
+            if prediction_changed_flag:  # send command when there is a change in prediction
+                print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
+            else:
+                return [0, 0]
 
     def update_channel_enable(self):
         self.odin_obj.channel_enable = self.prediction
