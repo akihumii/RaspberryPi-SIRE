@@ -179,10 +179,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.odin_obj.channel_enable = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 3    # enable all channels after toggling to closed-loop mode
                 self.odin_obj.send_channel_enable()
             print('switched to closed-loop mode...')
+            time.sleep(0.1)
 
         if self.flag_closed_loop and self.pin_closed_loop_obj.input_GPIO():
             self.flag_closed_loop = False
             print('switched to single stimulation mode...')
+            time.sleep(0.1)
 
     def check_change_parameter(self):
         if self.change_parameter_event.is_set():
