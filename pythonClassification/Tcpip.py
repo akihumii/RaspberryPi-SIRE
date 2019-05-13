@@ -99,5 +99,8 @@ class TcpIp:
         msg = 'DISCONNECT!!!!!!'  # 16 char
         try:
             self.socket_obj.send(msg)
-        except socket.timeout:
-            print("No connection has been established due to timeout...")
+        except (socket.timeout, IOError) as e:
+            if e.errno == errno.EPIPE:
+                print('connection broken...')
+            else:
+                print("No connection has been established due to timeout...")

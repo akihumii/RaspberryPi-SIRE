@@ -30,6 +30,7 @@ class CommandOdin:
         self.channel_enable = 0
         self.pulse_duration = 200 * np.ones(4, dtype=int)
         self.frequency = 50
+        self.step_size = 1 * 12  # convert it into bytes
 
         self.num_channel = 4
 
@@ -94,6 +95,11 @@ class CommandOdin:
         address = self.address.get('channel_enable')
         self.sock.send(self._convert_to_char([address, self.channel_enable]))
         return [address, self.channel_enable]
+
+    def send_step_size_increase(self):
+        address = self.address.get('step_increase')
+        self.sock.send(self._convert_to_char([address, self.step_size]))
+        return [address, self.step_size]
 
     def get_coefficients(self):
         coefficients = np.genfromtxt('formula.txt', delimiter=',', defaultfmt='%f')
