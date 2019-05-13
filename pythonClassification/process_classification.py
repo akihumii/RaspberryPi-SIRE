@@ -169,10 +169,14 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
     def check_change_parameter(self):
         if self.change_parameter_event.is_set():
             while not self.change_parameter_queue.empty():
-                data_parameter = self.change_parameter_queue.get()
-                print(data_parameter)
-                self.address.get(data_parameter[0])(data_parameter)
-                self.change_parameter_event.clear()
+                try:
+                    data_parameter = self.change_parameter_queue.get()
+                    # print(data_parameter)
+                    self.address.get(data_parameter[0])(data_parameter)
+                    self.change_parameter_event.clear()
+                except TypeError:
+                    print('failed to update the command:')
+                    print(data_parameter)
 
     def check_classify_dimension(self):
         if not self.flag_multi_channel and self.pin_sm_channel_obj.input_GPIO():  # switch to multi-channel classification
