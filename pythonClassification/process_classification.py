@@ -51,6 +51,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.start_stimulation_initial = False
         self.stop_stimulation_initial = False
 
+        self.stimulation_close_loop_flag = False
+
         self.change_parameter_queue = change_parameter_queue
         self.change_parameter_event = change_parameter_event
         self.stop_event = stop_event
@@ -65,6 +67,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xF7: self.update_pulse_duration,
             0xF9: self.update_pulse_duration,
             0xFA: self.update_pulse_duration,
+            0xFC: self.update_step_size
         }
 
         self.start_classify_flag = False
@@ -122,6 +125,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 break
         print('classify thread has stopped...')
 
+    def update_step_size(self, data):
+        self.odin_obj.step_size = data[1]
+        print('updated step size...')
+        print(data)
+        time.sleep(0.4)
+
     def update_frequency(self, data):
         self.odin_obj.frequency = data[1]
         self.odin_obj.send_frequency()
@@ -161,6 +170,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         if self.change_parameter_event.is_set():
             while not self.change_parameter_queue.empty():
                 data_parameter = self.change_parameter_queue.get()
+                print(data_parameter)
                 self.address.get(data_parameter[0])(data_parameter)
                 self.change_parameter_event.clear()
 
@@ -258,7 +268,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         if prediction_changed_flag:  # send command when there is a change in prediction
             if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
-                command = self.update_channel_enable()
+                if self.stimulation_close_loop_flag:
+                    command = self.odin_obj.send_step_size_increase()
+                else:
+                    command = self.update_channel_enable()
                 print('sending command to odin...')
                 print(command)
                 # print(self.odin_obj.amplitude)
