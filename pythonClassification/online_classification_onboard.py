@@ -36,6 +36,7 @@ PIN_SM_CHANNEL = 25  # HIGH for multi-channel classification; LOW for single-cha
 PIN_RESET = 12  # HIGH to reset the parameters and send the updated command to stimulator
 PIN_SAVE = 16  # HIGH to stop saving; LOW to start a new csv file to save the counter and stimulation command
 PIN_OFF = 21  # HIGH to close all ports and objects; LOW to start running the program again
+PIN_CLOSED_LOOP = 27  # HIGH for single stimulation channel enable mode; LOW for close-loop step-size up-and-down mode
 METHOD_IO = 'GPIO'  # METHOD for output display
 METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
 THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
@@ -60,6 +61,9 @@ if __name__ == "__main__":
 
     pin_save_obj = ConfigGPIO(PIN_SAVE, 'in', pull_up_down='up')
     pin_save_obj.setup_GPIO()
+
+    pin_closed_loop_obj = ConfigGPIO(PIN_CLOSED_LOOP, 'in', pull_up_down='up')
+    pin_closed_loop_obj.setup_GPIO()
 
     pin_off_obj = ConfigGPIO(PIN_OFF, 'in', pull_up_down='up')
     pin_off_obj.setup_GPIO()
@@ -100,7 +104,7 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 

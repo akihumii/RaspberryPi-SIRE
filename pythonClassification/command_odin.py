@@ -97,6 +97,7 @@ class CommandOdin:
         return [address, self.channel_enable]
 
     def send_step_size_increase(self):
+        print('sending step size increase commands...')
         address = self.address.get('step_increase')
         self.sock.send(self._convert_to_char([address, self.step_size]))
         return [address, self.step_size]
@@ -110,6 +111,7 @@ class CommandOdin:
         self.amplitude = coefficients[1, :].astype(np.double)
         self.pulse_duration = coefficients[2, :].astype(int)
         self.frequency = coefficients[3, 0].astype(int)
+        self.step_size = coefficients[4, 0].astype(int)*12
 
     def _get_pulse_duration_byte(self, channel):
         output = int(np.array(self.pulse_duration[channel]/5 - 3))
