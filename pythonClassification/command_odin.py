@@ -102,6 +102,12 @@ class CommandOdin:
         self.sock.send(self._convert_to_char([address, self.step_size]))
         return [address, self.step_size]
 
+    def send_step_size_decrease(self):
+        print('sending step size decrease commands...')
+        address = self.address.get('step_decrease')
+        self.sock.send(self._convert_to_char([address, self.step_size]))
+        return [address, self.step_size]
+
     def get_coefficients(self):
         coefficients = np.genfromtxt('formula.txt', delimiter=',', defaultfmt='%f')
         self.amplitude_a = coefficients[0, 0]

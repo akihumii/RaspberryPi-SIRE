@@ -75,8 +75,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xCB: self.update_debounce_delay
         }
 
-        self.stim_threshold_upper = 10
-        self.stim_threshold_lower = 10
+        self.stim_threshold_upper = 0.1
+        self.stim_threshold_lower = 0
         self.stim_debounce_delay = 10
 
         self.start_classify_flag = False
@@ -139,13 +139,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('classify thread has stopped...')
 
     def update_threshold_upper(self, data):
-        self.stim_threshold_upper = data[1]
+        self.stim_threshold_upper = float(data[1]) / 1000  # convert into milliseconds
         print('updated upper threshold...')
         print(data)
         time.sleep(0.4)
 
     def update_threshold_lower(self, data):
-        self.stim_threshold_lower = data[1]
+        self.stim_threshold_lower = float(data[1]) / 1000  # convert into milliseconds
         print('updated lower threshold...')
         print(data)
         time.sleep(0.4)
@@ -283,6 +283,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
             filename = sorted(x for x in os.listdir('classificationTmp') if x.endswith('Cha.sav'))
             # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
+            self.channel_decode = self.channel_decode_default
             self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
         else:  # single-channel classification
             filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
@@ -316,21 +317,33 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     print('prediction failed...')
 
         if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
-                if self.flag_closed_loop:  # closed-loop stimulation
+            if self.flag_closed_loop:  # closed-loop stimulation
+                # print(self.channel_decode)
+                data_temp = self.data[:, self.channel_decode]
+                if np.any(data_temp < self.stim_threshold_lower):  # increase step size when any window dropped below lower threshold
                     command = self.odin_obj.send_step_size_increase()
+                    # print('current increases...')
+                elif np.any(data_temp > self.stim_threshold_upper):  # decrease step size when any window crossed upper threshold
+                    command = self.odin_obj.send_step_size_decrease()
+                    # print('current decreases...')
+                else:
+                    command = [0, 0]
+                    # print(self.stim_threshold_lower)
+                    # print(self.stim_threshold_upper)
+                    # print(np.max(data_temp))
+                print('sending command to odin...')
+                # print(command)
+                # print(self.odin_obj.amplitude)
+                return command
+            else:  # single stimulation
+                if prediction_changed_flag:  # send command when there is a change in prediction
+                    command = self.update_channel_enable()
                     print('sending command to odin...')
                     print(command)
                     # print(self.odin_obj.amplitude)
                     return command
-                else:  # single stimulation
-                    if prediction_changed_flag:  # send command when there is a change in prediction
-                        command = self.update_channel_enable()
-                        print('sending command to odin...')
-                        print(command)
-                        # print(self.odin_obj.amplitude)
-                        return command
-                    else:
-                        return [0, 0]
+                else:
+                    return [0, 0]
         else:
             if prediction_changed_flag:  # send command when there is a change in prediction
                 print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
