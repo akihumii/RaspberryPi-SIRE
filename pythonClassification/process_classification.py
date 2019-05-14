@@ -168,7 +168,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
         else:  # single-channel classification
             filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
-            self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
+            self.channel_decode = [int(x[x.find('Ch') + 2]) for x in filename]  # there should be multiple classifier files
             self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
         print('loaded classifier...')
         print(filename)
@@ -177,7 +177,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         prediction_changed_flag = False
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
             # try:
-                prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
+                prediction = self.classify_function('all', self.data)  # pass in the channel index and data
                 if prediction != self.prediction:  # if prediction changes
                     for i in range(self.odin_obj.num_channel):
                         self.output(i, prediction, self.prediction)  # function of classification_decision
@@ -187,9 +187,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             # except ValueError:
             #     print('prediction failed...')
         else:
-            for i, x in enumerate(self.channel_decode):
+            for i in range(len(self.channel_decode)):
                 try:
-                    prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+                    prediction = self.classify_function(i, self.data)  # pass in the channel index and data
                     if prediction != (self.prediction >> i & 1):  # if prediction changes
                         self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
                         prediction_changed_flag = True
@@ -216,19 +216,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         return command
 
     def classify_features(self, channel_i, data):
-        features = self.extract_features(data)
         if channel_i == 'all':  # for the case of multi-channel decoding
+            features = np.array([self.extract_features(data[:, x-1]) for x in self.channel_decode_default])
+            features = np.hstack(np.transpose(np.vstack(features)))  # reconstruct into correct structure
             prediction = self.clf.predict([features]) - 1
         else:
+            features = self.extract_features(data[:, self.channel_decode[channel_i]])
             prediction = self.clf[channel_i].predict([features]) - 1
-        return prediction
+        return int(prediction)
 
     def classify_thresholds(self, channel_i, data):
         if channel_i == 'all':  # for the case of multi-channel decoding
-            prediction = data >= self.thresholds
+            prediction = data[:, self.channel_decode_default-1] >= self.thresholds
             prediction = prediction.any()
         else:
-            prediction = data >= self.thresholds[channel_i]
+            prediction = data[:, self.channel_decode[channel_i]] >= self.thresholds[channel_i]
             prediction = any(prediction)
         return int(prediction)
 
