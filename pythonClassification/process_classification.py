@@ -191,7 +191,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xFA: 3
         }
         channel_id = address.get(data[0])
-        self.odin_obj.pulse_duration[channel_id] = data[1]
+        self.odin_obj.pulse_duration[channel_id] = (data[1] + 3) * 5
         self.odin_obj.send_pulse_duration(channel_id)
         print('updated pulse duration...')
         print(data)
