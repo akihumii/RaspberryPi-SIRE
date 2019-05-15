@@ -1,5 +1,6 @@
 import numpy as np
 from filtering import Filtering
+from custom_filter import CustomFilter
 from saving import Saving
 from numba.decorators import jit
 
@@ -57,10 +58,9 @@ def get_buffer_func(buffer_read, __flag_start_bit, __sample_len, __flag_end_bit,
     return buffer_leftover, empty_buffer_flag, loc_start_orig, loc_start, buffer_process
 
 
-class DataHandler(Saving, Filtering):
+class DataHandler(Saving):
     def __init__(self, channel_len, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
         Saving.__init__(self)
-        Filtering.__init__(self, sampling_freq, hp_thresh, lp_thresh, notch_thresh)
         self.data_raw = []
         self.data_processed = []
         self.buffer_process = []
@@ -74,9 +74,12 @@ class DataHandler(Saving, Filtering):
         self.__channel_len = channel_len
         self.__sync_pulse_len = 1
         self.__counter_len = 1
+        self.__notch_bandwidth = 10
         self.__ring_column_len = self.__channel_len + self.__sync_pulse_len + self.__counter_len
 
-        self.filter_obj = [Filtering(sampling_freq, hp_thresh, lp_thresh, notch_thresh) for __ in range(self.__channel_len)]
+        self.filter_obj = [CustomFilter(hp_thresh, lp_thresh, notch_thresh, self.__notch_bandwidth, sampling_freq) for __ in
+                           range(self.__channel_len)]
+        # self.filter_obj = [Filtering(sampling_freq, hp_thresh, lp_thresh, notch_thresh) for __ in range(self.__channel_len)]
 
     def get_buffer(self, buffer_read):
         [buffer_leftover, empty_buffer_flag, self.loc_start_orig, self.loc_start, self.buffer_process] = get_buffer_func(buffer_read, self.__flag_start_bit, self.__sample_len, self.__flag_end_bit, self.__flag_sync_pulse, self.__counter_len, self.buffer_process)
@@ -85,8 +88,7 @@ class DataHandler(Saving, Filtering):
 
     def get_data_channel(self):  # obtain complete samples and form a matrix ( data_channel )
         self.data_raw = get_data_channel_func(self.buffer_process, self.__sample_len, self.loc_start, self.__channel_len, self.__sync_pulse_len, self.__counter_len)
-        self.data_processed = self.data_raw
-        self.data_processed = np.transpose(np.vstack([self.filter_obj[x].filter(self.data_raw[:, x])
+        self.data_processed = np.transpose(np.vstack([self.filter_obj[x].filter_data(self.data_raw[:, x])
                                                       for x in range(self.__channel_len)]))
         self.data_processed = np.hstack([self.data_processed, self.data_raw[:, self.__channel_len:]])
 
