@@ -221,7 +221,7 @@ bool verifyCounter(){
             isFrDetected = true;
         }
         else {
-            return;
+            return isFrDetected;
         }
     }
 
