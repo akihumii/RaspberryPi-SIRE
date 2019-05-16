@@ -110,6 +110,7 @@ if __name__ == "__main__":
                 if not empty_buffer_flag:
                     data_obj.get_data_channel()  # demultiplex and get the channel data
                     data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
+                    # data_obj.save(data_obj.data_raw, "a")  # save the raw data
 
                 if pin_off_obj.input_GPIO():
                     stop_event.set()  # stop all the other threads

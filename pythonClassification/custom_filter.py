@@ -1,7 +1,41 @@
 import numpy as np
+from numba import jitclass, float64,int16 , int8, boolean
 
 
-class CustomFilter:
+spec = [
+    ('notch_filter_enabled', boolean),
+    ('lowpass_filter_enabled', boolean),
+    ('highpass_filter_enabled', boolean),
+    ('highpass_cutoff_freq', float64),
+    ('lowpass_cutoff_freq', float64),
+    ('notch_freq', float64),
+    ('notch_bandwidth', int8),
+    ('sampling_freq', int16),
+    ('a0_hp', float64),
+    ('a1_hp', float64),
+    ('a2_hp', float64),
+    ('b1_hp', float64),
+    ('b2_hp', float64),
+    ('a0_lp', float64),
+    ('a1_lp', float64),
+    ('a2_lp', float64),
+    ('b1_lp', float64),
+    ('b2_lp', float64),
+    ('a0_n', float64),
+    ('a1_n', float64),
+    ('a2_n', float64),
+    ('b1_n', float64),
+    ('b2_n', float64),
+    ('TWO_PI', float64),
+    ('filtered_data', float64[:]),
+    ('filtered_data_hp', float64[:]),
+    ('filtered_data_n', float64[:]),
+    ('prev_raw_data', float64[:])
+]
+
+
+@jitclass(spec)
+class CustomFilter(object):
     def __init__(self, highpass_cutoff_freq, lowpass_cutoff_freq, notch_freq, notch_bandwidth, sampling_freq):
         self.notch_filter_enabled = False
         self.lowpass_filter_enabled = False
@@ -83,8 +117,9 @@ class CustomFilter:
         self.highpass_filter_enabled = 1
 
     def filter_data(self, raw_data):
+        raw_data = raw_data.astype(np.float64)
         if len(self.prev_raw_data >= 2):
-            raw_data = np.append(self.prev_raw_data[:2], raw_data)
+            raw_data = np.array(list(self.prev_raw_data[:2]) + list(raw_data), dtype=np.float64)
 
         prev_raw_data_temp = self.prev_raw_data
         self.prev_raw_data = raw_data[-2:]
@@ -107,11 +142,11 @@ class CustomFilter:
         if len(self.filtered_data_hp) > 1:
             self.filtered_data_hp = self.filtered_data_hp[-2:]
         else:
-            self.filtered_data_hp = np.append(self.filtered_data_hp, raw_data[:2])
+            self.filtered_data_hp = np.array(list(self.filtered_data_hp) + list(raw_data[:2]))
 
         for t in np.arange(2, len(raw_data)):
             temp = self.a0_hp * raw_data[t] + self.a1_hp * raw_data[t - 1] + self.a2_hp * raw_data[t - 2] - self.b1_hp * self.filtered_data_hp[t - 1] - self.b2_hp * self.filtered_data_hp[t - 2]
-            self.filtered_data_hp = np.append(self.filtered_data_hp, temp)
+            self.filtered_data_hp = np.array(list(self.filtered_data_hp) + [temp])
 
         return self.filtered_data_hp
     
@@ -119,11 +154,11 @@ class CustomFilter:
         if len(self.filtered_data) > 1:
             self.filtered_data = self.filtered_data[-2:]
         else:
-            self.filtered_data = np.append(self.filtered_data, raw_data[:2])
+            self.filtered_data = np.array(list(self.filtered_data) + list(raw_data[:2]))
 
         for t in np.arange(2, len(raw_data)):
             temp = self.a0_lp * raw_data[t] + self.a1_lp * raw_data[t - 1] + self.a2_lp * raw_data[t - 2] - self.b1_lp * self.filtered_data[t - 1] - self.b2_lp * self.filtered_data[t - 2]
-            self.filtered_data = np.append(self.filtered_data, temp)
+            self.filtered_data = np.array(list(self.filtered_data) + [temp])
 
         return self.filtered_data
     
@@ -131,11 +166,11 @@ class CustomFilter:
         if len(self.filtered_data_n) > 1:
             self.filtered_data_n = self.filtered_data_n[-2:]
         else:
-            self.filtered_data_n = np.append(self.filtered_data_n, raw_data[:2])
+            self.filtered_data_n = np.array(list(self.filtered_data_n) + list(raw_data[:2]))
 
         for t in np.arange(2, len(raw_data)):
             temp = self.a0_n * raw_data[t] + self.a1_n * raw_data[t - 1] + self.a2_n * raw_data[t - 2] - self.b1_n * self.filtered_data_n[t - 1] - self.b2_n * self.filtered_data_n[t - 2]
-            self.filtered_data_n = np.append(self.filtered_data_n, temp)
+            self.filtered_data_n = np.array(list(self.filtered_data_n) + [temp])
 
         return self.filtered_data_n
 
