@@ -1,7 +1,7 @@
 import numpy as np
 from custom_filter import CustomFilter
 from saving import Saving
-from numba import jitclass, float64, int64, int8, deferred_type
+from numba import jitclass, float64, int64, uint8, deferred_type
 
 
 custom_filter_type = deferred_type()
@@ -13,31 +13,33 @@ spec = [
     ('buffer_process', float64[:]),
     ('loc_start', int64[:]),
     ('loc_start_orig', int64[:]),
-    ('__flag_start_bit', int8),
-    ('__flag_end_bit', int8),
-    ('__flag_sync_pulse', int8[:]),
-    ('__sample_len', int8),
-    ('__chanel_len', int8),
-    ('__sync_pulse_len', int8),
-    ('__counter_len', int8),
-    ('__notch_bandwidth', int8),
-    ('__ring_column_len', int8),
-    ('filter_obj', custom_filter_type[:])
+    ('__flag_start_bit', uint8),
+    ('__flag_end_bit', uint8),
+    ('__flag_sync_pulse', uint8[:]),
+    ('__sample_len', uint8),
+    ('__channel_len', uint8),
+    ('__sync_pulse_len', uint8),
+    ('__counter_len', uint8),
+    ('__notch_bandwidth', uint8),
+    ('__ring_column_len', uint8),
+    ('filter_obj', custom_filter_type),
+    ('test_mat', uint8[:, :])
 ]
 
 
-class DataHandler(Saving):
+@jitclass(spec)
+class DataHandler(object):
     def __init__(self, channel_len, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
-        Saving.__init__(self)
         self.data_raw = np.zeros(0, dtype=np.float64)
         self.data_processed = np.zeros(0, dtype=np.float64)
         self.buffer_process = np.zeros(0, dtype=np.float64)
-        self.loc_start = np.zeros(0, dtype=np.float64)
-        self.loc_start_orig = np.zeros(0, dtype=np.float64)
+        self.loc_start = np.zeros(0, dtype=np.int64)
+        self.loc_start_orig = np.zeros(0, dtype=np.int64)
+        self.test_mat = np.array([[0]*5, [0]*5], dtype=np.uint8)
 
         self.__flag_start_bit = 165
         self.__flag_end_bit = 90
-        self.__flag_sync_pulse = [0, 255]
+        self.__flag_sync_pulse = np.array([0, 255], dtype=np.uint8)
         self.__sample_len = 25
         self.__channel_len = channel_len
         self.__sync_pulse_len = 1
@@ -45,8 +47,9 @@ class DataHandler(Saving):
         self.__notch_bandwidth = 10
         self.__ring_column_len = self.__channel_len + self.__sync_pulse_len + self.__counter_len
 
-        self.filter_obj = [CustomFilter(hp_thresh, lp_thresh, notch_thresh, self.__notch_bandwidth, sampling_freq) for __ in
-                           range(self.__channel_len)]
+        self.filter_obj = CustomFilter(hp_thresh, lp_thresh, notch_thresh, self.__notch_bandwidth, sampling_freq)
+
+        # self.filter_obj = np.array([CustomFilter(hp_thresh, lp_thresh, notch_thresh, self.__notch_bandwidth, sampling_freq) for __ in range(self.__channel_len)])
 
     def get_buffer(self, buffer_read):
         self.loc_start_orig = np.argwhere(np.array(buffer_read) == self.__flag_start_bit)
@@ -89,8 +92,10 @@ class DataHandler(Saving):
 
         self.data_raw = np.hstack([data_channel, data_sync_pulse, data_counter])
 
-        data_channel_filtered = np.transpose(np.vstack([self.filter_obj[x].filter_data(data_channel[:, x])
-                                                        for x in range(self.__channel_len)]))
+        data_channel_filtered = self.filter_obj.filter_data(data_channel)
+
+        # data_channel_filtered = np.transpose(np.vstack([self.filter_obj[x].filter_data(data_channel[:, x])
+        #                                                 for x in range(self.__channel_len)]))
 
         self.data_processed = np.hstack([data_channel_filtered, data_sync_pulse, data_counter])
 

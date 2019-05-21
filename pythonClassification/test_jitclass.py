@@ -11,16 +11,18 @@ if __name__ == "__main__":
     # print(a.increment(3))
 
     # data = np.arange(100)
-    # b = CustomFilter(200,500,50,10,1250)
-    # print('created custom filter class...')
-    # b.set_filter()
-    # print('finished setting filter...')
+    data = np.random.rand(64,10)
+    b = CustomFilter(200,500,50,10,1250)
+    print('created custom filter class...')
+    b.set_filter()
+    print('finished setting filter...')
     # for i in range(1000):
-    #     result = b.filter_data(data)
-    #     print(i)
+    result = b.filter_data(data)
+    print(result)
+    print(result.shape)
 
     # b = Filtering(1250,200,500,50)
 
-    a = DataHandler(10,1250,200,500,50)
+    # a = DataHandler(10,1250,200,500,50)
 
     print('Finished...')

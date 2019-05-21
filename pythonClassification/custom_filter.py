@@ -1,5 +1,5 @@
 import numpy as np
-from numba import jitclass, float64,int16 , int8, boolean
+from numba import jitclass, float64,int16 , int8, intp, boolean
 
 
 spec = [
@@ -27,10 +27,11 @@ spec = [
     ('b1_n', float64),
     ('b2_n', float64),
     ('TWO_PI', float64),
-    ('filtered_data', float64[:]),
-    ('filtered_data_hp', float64[:]),
-    ('filtered_data_n', float64[:]),
-    ('prev_raw_data', float64[:])
+    ('num_col', intp),
+    ('filtered_data', float64[:, ::1]),
+    ('filtered_data_hp', float64[:, :]),
+    ('filtered_data_n', float64[:, :]),
+    ('prev_raw_data', float64[:, :])
 ]
 
 
@@ -62,10 +63,11 @@ class CustomFilter(object):
         self.b1_n = 0.
         self.b2_n = 0.
         self.TWO_PI = 6.28318530718
-        self.filtered_data = np.zeros(0, dtype=np.float64)
-        self.filtered_data_hp = np.zeros(0, dtype=np.float64)
-        self.filtered_data_n = np.zeros(0, dtype=np.float64)
-        self.prev_raw_data = np.zeros(0, dtype=np.float64)
+        self.num_col = 10
+        self.filtered_data = np.zeros((2, self.num_col), dtype=np.float64)
+        self.filtered_data_hp = np.zeros((2, self.num_col), dtype=np.float64)
+        self.filtered_data_n = np.zeros((2, self.num_col), dtype=np.float64)
+        self.prev_raw_data = np.zeros((2, self.num_col), dtype=np.float64)
 
     def set_filter(self):
         if self.highpass_cutoff_freq:
@@ -116,13 +118,38 @@ class CustomFilter(object):
 
         self.highpass_filter_enabled = 1
 
-    def filter_data(self, raw_data):
-        raw_data = raw_data.astype(np.float64)
-        if len(self.prev_raw_data >= 2):
-            raw_data = np.array(list(self.prev_raw_data[:2]) + list(raw_data), dtype=np.float64)
+    def delete_rows(self, data, rows):
+        # [num_row, num_col] = data.shape
+        temp = np.ones(data.shape[0], dtype=np.intp)
+        temp[:rows] = False
+        return data[temp]
 
-        prev_raw_data_temp = self.prev_raw_data
-        self.prev_raw_data = raw_data[-2:]
+    def check_size(self, length_new):
+        length_old = self.filtered_data.shape[0]
+        if length_old < length_new:
+            temp = np.zeros((length_old, self.num_col), dtype=float64)
+            self.filtered_data = np.concatenate((self.filtered_data, temp))
+            self.filtered_data_hp = np.concatenate((self.filtered_data_hp, temp))
+            self.filtered_data_n = np.concatenate((self.filtered_data_n, temp))
+            # self.filtered_data = np.array([list(self.filtered_data[i, :]) for i in range(length_old)] + [[0]*self.num_col])
+            # self.filtered_data_hp = np.array([list(self.filtered_data_hp[i, :]) for i in range(length_old)] + [[0] * self.num_col])
+            # self.filtered_data_n = np.array([list(self.filtered_data_n[i, :]) for i in range(length_old)] + [[0] * self.num_col])
+        elif length_old > length_new:
+            self.filtered_data = self.delete_rows(self.filtered_data, length_old - length_new)
+            self.filtered_data_hp = self.delete_rows(self.filtered_data_hp, length_old - length_new)
+            self.filtered_data_n = self.delete_rows(self.filtered_data_n, length_old - length_new)
+
+    def filter_data(self, raw_data):
+        length_new = raw_data.shape[0]
+        self.check_size(length_new)  # check if the current size matches the raw data
+
+        raw_data = raw_data.astype(np.float64)
+        if not self.prev_raw_data[0,0]:
+            raw_data = np.concatenate((self.prev_raw_data[:2, :], raw_data))
+            # raw_data = np.array([list(self.prev_raw_data[i, :]) for i in range(2)] + [list(raw_data[i, :]) for i in range(length_new)], dtype=np.float64)
+
+        prev_raw_data_temp = self.prev_raw_data[:2, :]
+        self.prev_raw_data[:2, :] = raw_data[-2:, :]
 
         if self.notch_filter_enabled:
             raw_data = self.notch_filter(raw_data)
@@ -133,44 +160,44 @@ class CustomFilter(object):
         if self.lowpass_filter_enabled:
             raw_data = self.lopass_filter(raw_data)
 
-        if len(prev_raw_data_temp >= 2):
-            return raw_data[2:]
+        if not prev_raw_data_temp[0, 0]:
+            return raw_data[2:, :]
         else:
             return raw_data
 
     def hipass_filter(self, raw_data):
-        if len(self.filtered_data_hp) > 1:
-            self.filtered_data_hp = self.filtered_data_hp[-2:]
+        if not self.filtered_data_hp[0, 0]:
+            self.filtered_data_hp[:2, :] = self.filtered_data_hp[-2:, :]
         else:
-            self.filtered_data_hp = np.array(list(self.filtered_data_hp) + list(raw_data[:2]))
+            self.filtered_data_hp[:2, :] = raw_data[:2, :]
 
-        for t in np.arange(2, len(raw_data)):
-            temp = self.a0_hp * raw_data[t] + self.a1_hp * raw_data[t - 1] + self.a2_hp * raw_data[t - 2] - self.b1_hp * self.filtered_data_hp[t - 1] - self.b2_hp * self.filtered_data_hp[t - 2]
-            self.filtered_data_hp = np.array(list(self.filtered_data_hp) + [temp])
+        for t in np.arange(2, raw_data.shape[0]):
+            temp = self.a0_hp * raw_data[t, :] + self.a1_hp * raw_data[t - 1, :] + self.a2_hp * raw_data[t - 2, :] - self.b1_hp * self.filtered_data_hp[t - 1, :] - self.b2_hp * self.filtered_data_hp[t - 2, :]
+            self.filtered_data_hp[t, :] = temp
 
         return self.filtered_data_hp
     
     def lopass_filter(self, raw_data):
-        if len(self.filtered_data) > 1:
-            self.filtered_data = self.filtered_data[-2:]
+        if not self.filtered_data[0, 0]:
+            self.filtered_data[:2, :] = self.filtered_data[-2:, :]
         else:
-            self.filtered_data = np.array(list(self.filtered_data) + list(raw_data[:2]))
+            self.filtered_data[:2, :] = raw_data[:2, :]
 
-        for t in np.arange(2, len(raw_data)):
-            temp = self.a0_lp * raw_data[t] + self.a1_lp * raw_data[t - 1] + self.a2_lp * raw_data[t - 2] - self.b1_lp * self.filtered_data[t - 1] - self.b2_lp * self.filtered_data[t - 2]
-            self.filtered_data = np.array(list(self.filtered_data) + [temp])
+        for t in np.arange(2, raw_data.shape[0]):
+            temp = self.a0_lp * raw_data[t, :] + self.a1_lp * raw_data[t - 1, :] + self.a2_lp * raw_data[t - 2, :] - self.b1_lp * self.filtered_data[t - 1, :] - self.b2_lp * self.filtered_data[t - 2, :]
+            self.filtered_data[t, :] = temp
 
         return self.filtered_data
     
     def notch_filter(self, raw_data):
-        if len(self.filtered_data_n) > 1:
-            self.filtered_data_n = self.filtered_data_n[-2:]
+        if not self.filtered_data_n[0, 0]:
+            self.filtered_data_n[:2, :] = self.filtered_data_n[-2:, :]
         else:
-            self.filtered_data_n = np.array(list(self.filtered_data_n) + list(raw_data[:2]))
+            self.filtered_data_n[:2, :] = raw_data[:2, :]
 
-        for t in np.arange(2, len(raw_data)):
-            temp = self.a0_n * raw_data[t] + self.a1_n * raw_data[t - 1] + self.a2_n * raw_data[t - 2] - self.b1_n * self.filtered_data_n[t - 1] - self.b2_n * self.filtered_data_n[t - 2]
-            self.filtered_data_n = np.array(list(self.filtered_data_n) + [temp])
+        for t in np.arange(2, raw_data.shape[0]):
+            temp = self.a0_n * raw_data[t, :] + self.a1_n * raw_data[t - 1, :] + self.a2_n * raw_data[t - 2, :] - self.b1_n * self.filtered_data_n[t - 1, :] - self.b2_n * self.filtered_data_n[t - 2, :]
+            self.filtered_data_n[t, :] = temp
 
         return self.filtered_data_n
 
