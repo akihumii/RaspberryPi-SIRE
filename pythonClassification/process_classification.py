@@ -69,7 +69,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xF7: self.update_pulse_duration,
             0xF9: self.update_pulse_duration,
             0xFA: self.update_pulse_duration,
-            0xFC: self.update_step_size,
+            0xC8: self.update_step_size,
             0xC9: self.update_threshold_upper,
             0xCA: self.update_threshold_lower,
             0xCB: self.update_debounce_delay
@@ -138,6 +138,64 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 break
         print('classify thread has stopped...')
 
+    def classify(self):
+        prediction_changed_flag = False
+        if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
+            # try:
+                prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
+                if prediction != self.prediction:  # if prediction changes
+                    for i in range(self.odin_obj.num_channel):
+                        self.output(i, prediction, self.prediction)  # function of classification_decision
+                    prediction_changed_flag = True
+                self.prediction = prediction
+
+            # except ValueError:
+            #     print('prediction failed...')
+        else:
+            for i, x in enumerate(self.channel_decode):
+                try:
+                    prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+                    if prediction != (self.prediction >> i & 1):  # if prediction changes
+                        self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
+                        prediction_changed_flag = True
+
+                except ValueError:
+                    print('prediction failed...')
+
+        if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
+            if self.flag_closed_loop:  # closed-loop stimulation
+                # print(self.channel_decode)
+                data_temp = self.data[:, self.channel_decode]
+                if np.any(data_temp < self.stim_threshold_lower):  # increase step size when any window dropped below lower threshold
+                    command = self.odin_obj.send_step_size_increase()
+                    # print('current increases...')
+                elif np.any(data_temp > self.stim_threshold_upper):  # decrease step size when any window crossed upper threshold
+                    command = self.odin_obj.send_step_size_decrease()
+                    # print('current decreases...')
+                else:
+                    command = [0, 0]
+                    # print(self.stim_threshold_lower)
+                    # print(self.stim_threshold_upper)
+                    # print(np.max(data_temp))
+                print('sending command to odin...')
+                # print(command)
+                # print(self.odin_obj.amplitude)
+                return command
+            else:  # single stimulation
+                if prediction_changed_flag:  # send command when there is a change in prediction
+                    command = self.update_channel_enable()
+                    print('sending command to odin...')
+                    print(command)
+                    # print(self.odin_obj.amplitude)
+                    return command
+                else:
+                    return [0, 0]
+        else:
+            if prediction_changed_flag:  # send command when there is a change in prediction
+                print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
+            else:
+                return [0, 0]
+
     def update_threshold_upper(self, data):
         self.stim_threshold_upper = float(data[1]) / 1000  # convert into milliseconds
         print('updated upper threshold...')
@@ -151,13 +209,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         time.sleep(0.4)
 
     def update_debounce_delay(self, data):
-        self.stim_debounce_delay = data[1]
+        self.stim_debounce_delay = data[1] * 4  # decipher
         print('updated debounce delay...')
         print(data)
         time.sleep(0.4)
 
     def update_step_size(self, data):
-        self.odin_obj.step_size = data[1]
+        self.odin_obj.step_size = data[1] / 12  # decipher
         print('updated step size...')
         print(data)
         time.sleep(0.4)
@@ -191,11 +249,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xFA: 3
         }
         channel_id = address.get(data[0])
-        self.odin_obj.pulse_duration[channel_id] = (data[1] + 3) * 5
+        self.odin_obj.pulse_duration[channel_id] = (data[1] + 3) * 5  # decipher
         self.odin_obj.send_pulse_duration(channel_id)
         print('updated pulse duration...')
         print(data)
         time.sleep(0.04)
+
+    def update_channel_enable(self):
+        self.odin_obj.channel_enable = self.prediction
+        command = self.odin_obj.send_channel_enable()
+        return command
 
     def check_closed_loop(self):
         if not self.flag_closed_loop and not self.pin_closed_loop_obj.input_GPIO():
@@ -291,69 +354,6 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
         print('loaded classifier...')
         print(filename)
-
-    def classify(self):
-        prediction_changed_flag = False
-        if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
-            # try:
-                prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
-                if prediction != self.prediction:  # if prediction changes
-                    for i in range(self.odin_obj.num_channel):
-                        self.output(i, prediction, self.prediction)  # function of classification_decision
-                    prediction_changed_flag = True
-                self.prediction = prediction
-
-            # except ValueError:
-            #     print('prediction failed...')
-        else:
-            for i, x in enumerate(self.channel_decode):
-                try:
-                    prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-                    if prediction != (self.prediction >> i & 1):  # if prediction changes
-                        self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
-                        prediction_changed_flag = True
-
-                except ValueError:
-                    print('prediction failed...')
-
-        if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
-            if self.flag_closed_loop:  # closed-loop stimulation
-                # print(self.channel_decode)
-                data_temp = self.data[:, self.channel_decode]
-                if np.any(data_temp < self.stim_threshold_lower):  # increase step size when any window dropped below lower threshold
-                    command = self.odin_obj.send_step_size_increase()
-                    # print('current increases...')
-                elif np.any(data_temp > self.stim_threshold_upper):  # decrease step size when any window crossed upper threshold
-                    command = self.odin_obj.send_step_size_decrease()
-                    # print('current decreases...')
-                else:
-                    command = [0, 0]
-                    # print(self.stim_threshold_lower)
-                    # print(self.stim_threshold_upper)
-                    # print(np.max(data_temp))
-                print('sending command to odin...')
-                # print(command)
-                # print(self.odin_obj.amplitude)
-                return command
-            else:  # single stimulation
-                if prediction_changed_flag:  # send command when there is a change in prediction
-                    command = self.update_channel_enable()
-                    print('sending command to odin...')
-                    print(command)
-                    # print(self.odin_obj.amplitude)
-                    return command
-                else:
-                    return [0, 0]
-        else:
-            if prediction_changed_flag:  # send command when there is a change in prediction
-                print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
-            else:
-                return [0, 0]
-
-    def update_channel_enable(self):
-        self.odin_obj.channel_enable = self.prediction
-        command = self.odin_obj.send_channel_enable()
-        return command
 
     def classify_features(self, channel_i, data):
         features = self.extract_features(data)
