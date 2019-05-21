@@ -33,6 +33,8 @@ class ClientSend(Thread):
                 totalsent = totalsent + sent
             print('finished sending %s...' % msg)
 
+            time.sleep(1)
+            print('Server sent: ', self.sock.recv(1024))
             time.sleep(2)
 
 
@@ -66,13 +68,16 @@ def listen_socket():
     obj_socket.listen(5)
     print('socket listening...')
 
+    count = 1
     while 1:
+        print('waiting for client %d...' % count)
         clientsocket, address = obj_socket.accept()  # waiting for connection
         print('Client connected...')
         Client(clientsocket)  # receive msg from client
+        count += 1
         time.sleep(4)
 
 
 if __name__ == "__main__":
-    listen_socket()
     create_client()
+    listen_socket()

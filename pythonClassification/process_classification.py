@@ -9,7 +9,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, stop_event):
+    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
@@ -46,20 +46,48 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.pin_save_obj = pin_save_obj
         self.saving_file = Saving()
 
+        self.pin_closed_loop_obj = pin_closed_loop_obj
+
         self.start_stimulation_address = 111
         self.stop_stimulation_address = 222
         self.start_stimulation_initial = False
         self.stop_stimulation_initial = False
 
+        self.stimulation_close_loop_flag = False
+
+        self.change_parameter_queue = change_parameter_queue
+        self.change_parameter_event = change_parameter_event
         self.stop_event = stop_event
+
+        self.address = {
+            0xF1: self.update_amplitude,
+            0xF2: self.update_amplitude,
+            0xF3: self.update_amplitude,
+            0xF4: self.update_amplitude,
+            0xF5: self.update_frequency,
+            0xF6: self.update_pulse_duration,
+            0xF7: self.update_pulse_duration,
+            0xF9: self.update_pulse_duration,
+            0xFA: self.update_pulse_duration,
+            0xFC: self.update_step_size,
+            0xC9: self.update_threshold_upper,
+            0xCA: self.update_threshold_lower,
+            0xCB: self.update_debounce_delay
+        }
+
+        self.stim_threshold_upper = 10
+        self.stim_threshold_lower = 10
+        self.stim_debounce_delay = 10
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
         self.flag_multi_channel = False
         self.flag_reset = False
         self.flag_save_new = False
+        self.flag_closed_loop = False
 
     def run(self):
+        time.sleep(1)  # wait for other threads to start running
         self.setup()  # setup GPIO/serial classification display output
         self.load_classifier()  # load classifier
 
@@ -69,6 +97,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.check_stimulation_flag()
             self.check_reset_flag()
             self.check_classify_dimension()
+            self.check_change_parameter()
+            self.check_closed_loop()
 
             # start classifying when data in ring queue has enough data
             if not self.start_classify_flag:
@@ -83,7 +113,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     command_temp = self.classify()  # do the prediction and the display it
 
                     if not self.flag_save_new:
-                        command_array = np.zeros([np.size(self.data, 0), 7])  # create an empty command array
+                        command_array = np.zeros([np.size(self.data, 0), 13])  # create an empty command array
                         command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
                         if self.start_stimulation_initial:
                             command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
@@ -95,8 +125,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                         command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
                         if self.start_stimulation_flag:
                             command_array[:, 3:7] = self.odin_obj.amplitude
+                            command_array[:, 7:11] = self.odin_obj.pulse_duration
+                            command_array[:, 11] = self.odin_obj.frequency
+                            command_array[:, 12] = self.odin_obj.step_size
                         else:
-                            command_array[:, 3:7] = 0
+                            command_array[:, 3:] = 0
 
                         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
@@ -104,6 +137,91 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if self.stop_event.is_set():
                 break
         print('classify thread has stopped...')
+
+    def update_threshold_upper(self, data):
+        self.stim_threshold_upper = data[1]
+        print('updated upper threshold...')
+        print(data)
+        time.sleep(0.4)
+
+    def update_threshold_lower(self, data):
+        self.stim_threshold_lower = data[1]
+        print('updated lower threshold...')
+        print(data)
+        time.sleep(0.4)
+
+    def update_debounce_delay(self, data):
+        self.stim_debounce_delay = data[1]
+        print('updated debounce delay...')
+        print(data)
+        time.sleep(0.4)
+
+    def update_step_size(self, data):
+        self.odin_obj.step_size = data[1]
+        print('updated step size...')
+        print(data)
+        time.sleep(0.4)
+
+    def update_frequency(self, data):
+        self.odin_obj.frequency = data[1]
+        self.odin_obj.send_frequency()
+        print('updated frequency...')
+        print(data)
+        time.sleep(0.04)
+
+    def update_amplitude(self, data):
+        address = {
+            0xF1: 0,
+            0xF2: 1,
+            0xF3: 2,
+            0xF4: 3
+        }
+        channel_id = address.get(data[0])
+        self.odin_obj.amplitude[channel_id] = data[1]
+        self.odin_obj.send_amplitude(channel_id)
+        print('updated amplitude...')
+        print(data)
+        time.sleep(0.04)
+
+    def update_pulse_duration(self, data):
+        address = {
+            0xF6: 0,
+            0xF7: 1,
+            0xF9: 2,
+            0xFA: 3
+        }
+        channel_id = address.get(data[0])
+        self.odin_obj.pulse_duration[channel_id] = data[1]
+        self.odin_obj.send_pulse_duration(channel_id)
+        print('updated pulse duration...')
+        print(data)
+        time.sleep(0.04)
+
+    def check_closed_loop(self):
+        if not self.flag_closed_loop and not self.pin_closed_loop_obj.input_GPIO():
+            self.flag_closed_loop = True
+            if not np.array(self.odin_obj.channel_enable).all():
+                self.odin_obj.channel_enable = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 3    # enable all channels after toggling to closed-loop mode
+                self.odin_obj.send_channel_enable()
+            print('switched to closed-loop mode...')
+            time.sleep(0.1)
+
+        if self.flag_closed_loop and self.pin_closed_loop_obj.input_GPIO():
+            self.flag_closed_loop = False
+            print('switched to single stimulation mode...')
+            time.sleep(0.1)
+
+    def check_change_parameter(self):
+        if self.change_parameter_event.is_set():
+            while not self.change_parameter_queue.empty():
+                try:
+                    data_parameter = self.change_parameter_queue.get()
+                    # print(data_parameter)
+                    self.address.get(data_parameter[0])(data_parameter)
+                    self.change_parameter_event.clear()
+                except TypeError:
+                    print('failed to update the command:')
+                    print(data_parameter)
 
     def check_classify_dimension(self):
         if not self.flag_multi_channel and self.pin_sm_channel_obj.input_GPIO():  # switch to multi-channel classification
@@ -197,18 +315,27 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 except ValueError:
                     print('prediction failed...')
 
-        if prediction_changed_flag:  # send command when there is a change in prediction
-            if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
-                command = self.update_channel_enable()
-                print('sending command to odin...')
-                print(command)
-                # print(self.odin_obj.amplitude)
-                return command
-            else:
-                print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
-                return [0, 0]
+        if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
+                if self.flag_closed_loop:  # closed-loop stimulation
+                    command = self.odin_obj.send_step_size_increase()
+                    print('sending command to odin...')
+                    print(command)
+                    # print(self.odin_obj.amplitude)
+                    return command
+                else:  # single stimulation
+                    if prediction_changed_flag:  # send command when there is a change in prediction
+                        command = self.update_channel_enable()
+                        print('sending command to odin...')
+                        print(command)
+                        # print(self.odin_obj.amplitude)
+                        return command
+                    else:
+                        return [0, 0]
         else:
-            return [0, 0]
+            if prediction_changed_flag:  # send command when there is a change in prediction
+                print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
+            else:
+                return [0, 0]
 
     def update_channel_enable(self):
         self.odin_obj.channel_enable = self.prediction
