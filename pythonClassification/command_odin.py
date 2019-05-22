@@ -30,7 +30,7 @@ class CommandOdin:
         self.channel_enable = 0
         self.pulse_duration = 200 * np.ones(4, dtype=int)
         self.frequency = 50
-        self.step_size = 1 * 12  # convert it into bytes
+        self.step_size = 1
 
         self.num_channel = 4
 
@@ -99,13 +99,13 @@ class CommandOdin:
     def send_step_size_increase(self):
         print('sending step size increase commands...')
         address = self.address.get('step_increase')
-        self.sock.send(self._convert_to_char([address, self.step_size]))
+        self.sock.send(self._convert_to_char([address, self._get_step_size_byte()]))
         return [address, self.step_size]
 
     def send_step_size_decrease(self):
         print('sending step size decrease commands...')
         address = self.address.get('step_decrease')
-        self.sock.send(self._convert_to_char([address, self.step_size]))
+        self.sock.send(self._convert_to_char([address, self._get_step_size_byte()]))
         return [address, self.step_size]
 
     def get_coefficients(self):
@@ -130,6 +130,9 @@ class CommandOdin:
             output = self.amplitude[channel]**2*self.amplitude_a + self.amplitude[channel]*self.amplitude_b - self.amplitude_c  # the conversion into bytes
             output = int(output)
         return output
+
+    def _get_step_size_byte(self):
+        return self.step_size * 12
 
     def _convert_to_char(self, data):
         output = [chr(int(x)) for x in data]
