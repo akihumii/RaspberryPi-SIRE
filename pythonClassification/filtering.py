@@ -6,9 +6,9 @@ from numba.decorators import jit
 def filter_func(filter_flag, filter_z, filter_b, filter_a, data_buffer_all):
     if filter_flag:
         data_filtered, filter_z = signal.lfilter(filter_b, filter_a, data_buffer_all, zi=filter_z)
-        return data_filtered
+        return data_filtered, filter_z
     else:
-        return data_buffer_all
+        return data_buffer_all, filter_z
 
 
 class Filtering:
@@ -62,8 +62,8 @@ class Filtering:
         # for i, x in enumerate(data_buffer_all):
         #     self.data_filtered[i], self.filter_z = signal.lfilter(self.filter_obj, 1, [x], zi=self.filter_z)
 
-        data_filtered = filter_func(self.filter_flag, self.filter_z, self.filter_b, self.filter_a, data_buffer_all)
-        return data_filtered
+        [self.data_filtered, self.filter_z] = filter_func(self.filter_flag, self.filter_z, self.filter_b, self.filter_a, data_buffer_all)
+        return self.data_filtered
 
         # self.data_filtered = signal.lfilter(self.filter_obj, 1, data_buffer_all, zi=self.filter_z)
 

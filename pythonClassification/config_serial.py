@@ -9,6 +9,7 @@ class ConfigSerial:
 
     def output_serial(self, data):
         self.ser.write('%d\n' % data)
+        print('writing data: %d...' % data)
         # print('Sent %d...' % data)
 
     def input_serial(self):

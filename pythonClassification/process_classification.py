@@ -23,6 +23,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.features_id = features_id
         self.pin_stim_obj = pin_stim_obj
         self.pin_sm_channel_obj = pin_sm_channel_obj
+        self.method_io = method_io
 
         method_classify_all = {
             'features': self.classify_features,
@@ -120,6 +121,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 # print(self.data[-1, 11])  # print counter
                 # self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
 
+                # print('start classifying...')
                 if self.start_classify_flag:
                     command_temp = self.classify()  # do the prediction and the display it
 
@@ -145,6 +147,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
                         self.saving_file.save(np.hstack([self.data, command_array]), "a")  # save the counter and the command
+                # print('stop classifying...')
             if self.stop_event.is_set():
                 break
         print('classify thread has stopped...')
@@ -154,10 +157,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
             # try:
             prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
-            for i in range(self.odin_obj.num_channel):
-                if (prediction >> i & 1) != (self.prediction >> i & 1):  # if prediction changes
-                    self.prediction = self.output(i, prediction >> i & 1, self.prediction)  # function of classification_decision
-                    prediction_changed_flag = True
+            if self.method_io == 'serial':
+                if prediction != self.prediction:
+                    self.output_serial_direct(prediction)
+                    self.prediction = prediction
+            else:
+                for i in range(self.odin_obj.num_channel):
+                    if (prediction >> i & 1) != (self.prediction >> i & 1):  # if prediction changes
+                        self.prediction = self.output(i, prediction >> i & 1, self.prediction)  # function of classification_decision
+                        prediction_changed_flag = True
 
             # except ValueError:
             #     print('prediction failed...')

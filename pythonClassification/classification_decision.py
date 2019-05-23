@@ -22,9 +22,15 @@ class ClassificationDecision(ConfigGPIO, ConfigSerial, TcpIp):
             'serial': self.output_serial,
         }
 
-        switcher_output.get(self.method)(self.result)
+        try:
+            switcher_output.get(self.method)(self.result)
+        except AttributeError:
+            pass
 
         return self.result
+
+    def output_serial_direct(self, data):
+        self.output_serial(data)
 
     def input(self):
         switcher_output = {

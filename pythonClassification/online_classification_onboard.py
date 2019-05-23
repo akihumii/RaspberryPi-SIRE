@@ -91,7 +91,6 @@ if __name__ == "__main__":
             thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, stop_event)  # send data to GUI in another thread
             thread_bypass_data.start()  # start thread to bypass data to GUI
 
-
             odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
 
             tcp_ip_sylph.connect()
@@ -108,6 +107,8 @@ if __name__ == "__main__":
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 
+            # saving_obj = Saving()
+
             while True:
                 [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
                 if raw_buffer_event.is_set():  # will be true when there is a client successfully bound the server
@@ -118,6 +119,7 @@ if __name__ == "__main__":
                 if not empty_buffer_flag:
                     data_obj.get_data_channel()  # demultiplex and get the channel data
                     data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
+                    # saving_obj.save(data_obj.data_raw, "a")
 
                 if pin_off_obj.input_GPIO():
                     stop_event.set()  # stop all the other threads
