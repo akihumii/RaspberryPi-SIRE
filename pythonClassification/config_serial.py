@@ -25,13 +25,14 @@ class ConfigSerial:
 
         port = switcher_setup.get(self.mode)
 
-        try:
-            for x in range(4):
+        for x in range(4):
+            try:
                 self.ser = serial.Serial(
                     port='%s%d' % (port, x),  # Replace ttyS0 with ttyAM0 for Pi1,Pi2,Pi0
                     baudrate=19200,
                     timeout=1
                 )
-        except serial.serialutil.SerialException:
-            print('No serial port is activated...')
-            raise
+                break
+            except serial.serialutil.SerialException:
+                print('No serial port is activated...')
+

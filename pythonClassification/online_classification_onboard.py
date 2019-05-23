@@ -37,7 +37,7 @@ PIN_RESET = 12  # HIGH to reset the parameters and send the updated command to s
 PIN_SAVE = 16  # HIGH to stop saving; LOW to start a new csv file to save the counter and stimulation command
 PIN_OFF = 21  # HIGH to close all ports and objects; LOW to start running the program again
 PIN_CLOSED_LOOP = 19  # HIGH for single stimulation channel enable mode; LOW for close-loop step-size up-and-down mode
-METHOD_IO = 'GPIO'  # METHOD for output display
+METHOD_IO = 'serial'  # METHOD for output display
 METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
 # THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
 

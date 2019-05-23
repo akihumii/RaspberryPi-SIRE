@@ -154,11 +154,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
             # try:
             prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
-            if prediction != self.prediction:  # if prediction changes
-                for i in range(self.odin_obj.num_channel):
-                    self.output(i, prediction, self.prediction)  # function of classification_decision
-                prediction_changed_flag = True
-            self.prediction = prediction
+            for i in range(self.odin_obj.num_channel):
+                if (prediction >> i & 1) != (self.prediction >> i & 1):  # if prediction changes
+                    self.prediction = self.output(i, prediction >> i & 1, self.prediction)  # function of classification_decision
+                    prediction_changed_flag = True
 
             # except ValueError:
             #     print('prediction failed...')
@@ -249,7 +248,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('updated threshold digits...')
         print(data)
         print(self.stim_threshold)
-        time.sleep(0.4)
+        time.sleep(0.04)
 
     def update_threshold_power(self, data):
         address = {
@@ -267,7 +266,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('updated threshold power...')
         print(data)
         print(self.stim_threshold)
-        time.sleep(0.4)
+        time.sleep(0.04)
 
     def update_threshold(self, channel_id):
         self.stim_threshold[channel_id] = self.stim_threshold_digit[channel_id] * 10 ** self.stim_threshold_power[channel_id]
@@ -276,25 +275,25 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.stim_threshold_upper = data[1]
         print('updated upper threshold...')
         print(data)
-        time.sleep(0.4)
+        time.sleep(0.04)
 
     def update_threshold_lower(self, data):
         self.stim_threshold_lower = data[1]
         print('updated lower threshold...')
         print(data)
-        time.sleep(0.4)
+        time.sleep(0.04)
 
     def update_debounce_delay(self, data):
         self.stim_debounce_delay = data[1]
         print('updated debounce delay...')
         print(data)
-        time.sleep(0.4)
+        time.sleep(0.04)
 
     def update_step_size(self, data):
         self.odin_obj.step_size = data[1]
         print('updated step size...')
         print(data)
-        time.sleep(0.4)
+        time.sleep(0.04)
 
     def update_frequency(self, data):
         self.odin_obj.frequency = data[1]
