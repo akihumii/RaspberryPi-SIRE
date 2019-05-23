@@ -3,13 +3,14 @@ import os
 import numpy as np
 import pickle
 import time
+import bitwise_operation
 from saving import Saving
 from classification_decision import ClassificationDecision
 from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, thresholds, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event):
+    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, method_io, pin_led, 'out')
 
@@ -28,8 +29,6 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             'thresholds': self.classify_thresholds
         }
         self.classify_function = method_classify_all.get(method_classify)
-
-        self.thresholds = thresholds
 
         self.__channel_len = channel_len
 
@@ -72,12 +71,24 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xFC: self.update_step_size,
             0xC9: self.update_threshold_upper,
             0xCA: self.update_threshold_lower,
-            0xCB: self.update_debounce_delay
+            0xCB: self.update_debounce_delay,
+            0xCC: self.update_threshold_digit,
+            0xCD: self.update_threshold_digit,
+            0xCE: self.update_threshold_digit,
+            0xCF: self.update_threshold_digit,
+            0xD0: self.update_threshold_power,
+            0xD1: self.update_threshold_power,
+            0xD2: self.update_threshold_power,
+            0xD3: self.update_threshold_power
         }
 
         self.stim_threshold_upper = 10
         self.stim_threshold_lower = 10
         self.stim_debounce_delay = 10
+
+        self.stim_threshold_digit = 1 * np.ones(np.shape(self.channel_decode_default), dtype=np.float)
+        self.stim_threshold_power = 10 * np.ones(np.shape(self.channel_decode_default), dtype=np.float)
+        self.stim_threshold = [x * 10 ** self.stim_threshold_power[i] for i, x in enumerate(self.stim_threshold_digit)]
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
@@ -138,6 +149,129 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 break
         print('classify thread has stopped...')
 
+    def classify(self):
+        prediction_changed_flag = False
+        if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
+            # try:
+            prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
+            if prediction != self.prediction:  # if prediction changes
+                for i in range(self.odin_obj.num_channel):
+                    self.output(i, prediction, self.prediction)  # function of classification_decision
+                prediction_changed_flag = True
+            self.prediction = prediction
+
+            # except ValueError:
+            #     print('prediction failed...')
+        else:
+            for i, x in enumerate(self.channel_decode):
+                try:
+                    prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+                    if prediction != (self.prediction >> i & 1):  # if prediction changes
+                        self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
+                        prediction_changed_flag = True
+
+                except ValueError:
+                    print('prediction failed...')
+
+        if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
+            if self.flag_closed_loop:  # closed-loop stimulation
+                command = self.odin_obj.send_step_size_increase()
+                print('sending command to odin...')
+                print(command)
+                # print(self.odin_obj.amplitude)
+                return command
+            else:  # single stimulation
+                if prediction_changed_flag:  # send command when there is a change in prediction
+                    command = self.update_channel_enable()
+                    print('sending command to odin...')
+                    print(command)
+                    # print(self.odin_obj.amplitude)
+                    return command
+                else:
+                    return [0, 0]
+        else:
+            if prediction_changed_flag:  # send command when there is a change in prediction
+                print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
+            else:
+                return [0, 0]
+
+    def load_classifier(self):
+        if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
+            filename = sorted(x for x in os.listdir('classificationTmp') if x.endswith('Cha.sav'))
+            # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
+            self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
+        else:  # single-channel classification
+            filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
+            self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
+            self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
+        print('loaded classifier...')
+        print(filename)
+
+    def classify_features(self, channel_i, data):
+        features = self.extract_features(data)
+        if channel_i == 'all':  # for the case of multi-channel decoding
+            prediction = self.clf.predict([features]) - 1
+        else:
+            prediction = self.clf[channel_i].predict([features]) - 1
+        return prediction
+
+    def classify_thresholds(self, channel_i, data):
+        if channel_i == 'all':  # for the case of multi-channel decoding
+            prediction = False
+            channel_len = len(self.channel_decode_default)
+            for i in range(channel_len):
+                prediction = any(data[:, i] > self.stim_threshold[i])
+                if prediction:
+                    prediction = 0
+                    for i in range(channel_len):
+                        prediction = bitwise_operation.set_bit(prediction, i)
+                    break
+        else:
+            prediction = data >= self.stim_threshold[channel_i]
+            prediction = any(prediction)
+        return int(prediction)
+
+    def extract_features(self, data):
+        feature_obj = Features(data, self.sampling_freq, self.features_id)
+        features = feature_obj.extract_features()
+        return features
+
+    def update_threshold_digit(self, data):
+        address = {
+            0xCC: 0,
+            0xCD: 1,
+            0xCE: 2,
+            0xCF: 3
+        }
+        channel_id = address.get(data[0])
+        self.stim_threshold_digit[channel_id] = data[1]
+        self.update_threshold(channel_id)
+        print('updated threshold digits...')
+        print(data)
+        print(self.stim_threshold)
+        time.sleep(0.4)
+
+    def update_threshold_power(self, data):
+        address = {
+            0xD0: 0,
+            0xD1: 1,
+            0xD2: 2,
+            0xD3: 3
+        }
+        channel_id = address.get(data[0])
+        if data[1] > 50:
+            self.stim_threshold_power[channel_id] = np.array(data[1] - 256, dtype=np.float)
+        else:
+            self.stim_threshold_power[channel_id] = data[1]
+        self.update_threshold(channel_id)
+        print('updated threshold power...')
+        print(data)
+        print(self.stim_threshold)
+        time.sleep(0.4)
+
+    def update_threshold(self, channel_id):
+        self.stim_threshold[channel_id] = self.stim_threshold_digit[channel_id] * 10 ** self.stim_threshold_power[channel_id]
+
     def update_threshold_upper(self, data):
         self.stim_threshold_upper = data[1]
         print('updated upper threshold...')
@@ -197,6 +331,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(data)
         time.sleep(0.04)
 
+    def update_channel_enable(self):
+        self.odin_obj.channel_enable = self.prediction
+        command = self.odin_obj.send_channel_enable()
+        return command
+
     def check_closed_loop(self):
         if not self.flag_closed_loop and not self.pin_closed_loop_obj.input_GPIO():
             self.flag_closed_loop = True
@@ -239,13 +378,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
     def check_reset_flag(self):
         if not self.flag_reset and self.pin_reset_obj.input_GPIO():  # reload parameters
             self.flag_reset = True
-            self.thresholds = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
+            # self.thresholds = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
             self.odin_obj.get_coefficients()
             self.odin_obj.send_parameters()
             time.sleep(0.04)
             self.update_channel_enable()
-            print('thresholds have been reset...')
-            print(self.thresholds)
+            # print('thresholds have been reset...')
+            # print(self.thresholds)
             time.sleep(0.1)
 
         if self.flag_reset and not self.pin_reset_obj.input_GPIO():
@@ -279,90 +418,6 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             print('resume saving with a new file...')
             time.sleep(0.1)
 
-    def load_classifier(self):
-        if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
-            filename = sorted(x for x in os.listdir('classificationTmp') if x.endswith('Cha.sav'))
-            # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
-            self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
-        else:  # single-channel classification
-            filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
-            self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
-            self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
-        print('loaded classifier...')
-        print(filename)
-
-    def classify(self):
-        prediction_changed_flag = False
-        if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
-            # try:
-                prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
-                if prediction != self.prediction:  # if prediction changes
-                    for i in range(self.odin_obj.num_channel):
-                        self.output(i, prediction, self.prediction)  # function of classification_decision
-                    prediction_changed_flag = True
-                self.prediction = prediction
-
-            # except ValueError:
-            #     print('prediction failed...')
-        else:
-            for i, x in enumerate(self.channel_decode):
-                try:
-                    prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-                    if prediction != (self.prediction >> i & 1):  # if prediction changes
-                        self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
-                        prediction_changed_flag = True
-
-                except ValueError:
-                    print('prediction failed...')
-
-        if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
-                if self.flag_closed_loop:  # closed-loop stimulation
-                    command = self.odin_obj.send_step_size_increase()
-                    print('sending command to odin...')
-                    print(command)
-                    # print(self.odin_obj.amplitude)
-                    return command
-                else:  # single stimulation
-                    if prediction_changed_flag:  # send command when there is a change in prediction
-                        command = self.update_channel_enable()
-                        print('sending command to odin...')
-                        print(command)
-                        # print(self.odin_obj.amplitude)
-                        return command
-                    else:
-                        return [0, 0]
-        else:
-            if prediction_changed_flag:  # send command when there is a change in prediction
-                print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
-            else:
-                return [0, 0]
-
-    def update_channel_enable(self):
-        self.odin_obj.channel_enable = self.prediction
-        command = self.odin_obj.send_channel_enable()
-        return command
-
-    def classify_features(self, channel_i, data):
-        features = self.extract_features(data)
-        if channel_i == 'all':  # for the case of multi-channel decoding
-            prediction = self.clf.predict([features]) - 1
-        else:
-            prediction = self.clf[channel_i].predict([features]) - 1
-        return prediction
-
-    def classify_thresholds(self, channel_i, data):
-        if channel_i == 'all':  # for the case of multi-channel decoding
-            prediction = data >= self.thresholds
-            prediction = prediction.any()
-        else:
-            prediction = data >= self.thresholds[channel_i]
-            prediction = any(prediction)
-        return int(prediction)
-
-    def extract_features(self, data):
-        feature_obj = Features(data, self.sampling_freq, self.features_id)
-        features = feature_obj.extract_features()
-        return features
 
 
 
