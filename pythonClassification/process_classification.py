@@ -60,6 +60,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.stop_event = stop_event
 
         self.address = {
+            0xF8: self.update_on_off,
+            0x8F: self.update_on_off,
             0xF1: self.update_amplitude,
             0xF2: self.update_amplitude,
             0xF3: self.update_amplitude,
@@ -69,6 +71,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xF7: self.update_pulse_duration,
             0xF9: self.update_pulse_duration,
             0xFA: self.update_pulse_duration,
+            0xFB: self.update_channel_enable,
             0xFC: self.update_step_size,
             0xC9: self.update_threshold_upper,
             0xCA: self.update_threshold_lower,
@@ -161,6 +164,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 if prediction != self.prediction:
                     self.output_serial_direct(prediction)
                     self.prediction = prediction
+                    prediction_changed_flag = True
             else:
                 for i in range(self.odin_obj.num_channel):
                     if (prediction >> i & 1) != (self.prediction >> i & 1):  # if prediction changes
@@ -170,15 +174,25 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             # except ValueError:
             #     print('prediction failed...')
         else:
-            for i, x in enumerate(self.channel_decode):
-                try:
-                    prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-                    if prediction != (self.prediction >> i & 1):  # if prediction changes
-                        self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
-                        prediction_changed_flag = True
+            if self.method_io == 'serial':
+                prediction = 0
+                for i, x in enumerate(self.channel_decode):
+                    prediction_temp = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+                    prediction = bitwise_operation.edit_bit(i, prediction_temp, prediction)
+                if prediction != self.prediction:  # if prediction changes
+                    self.output_serial_direct(prediction)
+                    self.prediction = prediction
+                    prediction_changed_flag = True
+            else:
+                for i, x in enumerate(self.channel_decode):
+                    try:
+                        prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+                        if prediction != (self.prediction >> i & 1):  # if prediction changes
+                            self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
+                            prediction_changed_flag = True
 
-                except ValueError:
-                    print('prediction failed...')
+                    except ValueError:
+                        print('prediction failed...')
 
         if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
             if self.flag_closed_loop:  # closed-loop stimulation
@@ -189,8 +203,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 return command
             else:  # single stimulation
                 if prediction_changed_flag:  # send command when there is a change in prediction
-                    command = self.update_channel_enable()
-                    print('sending command to odin...')
+                    command = self.change_channel_enable()
                     print(command)
                     # print(self.odin_obj.amplitude)
                     return command
@@ -229,9 +242,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             for i in range(channel_len):
                 prediction = any(data[:, i] > self.stim_threshold[i])
                 if prediction:
-                    prediction = 0
-                    for i in range(channel_len):
-                        prediction = bitwise_operation.set_bit(prediction, i)
+                    prediction = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 3    # enable all channels
                     break
         else:
             prediction = data >= self.stim_threshold[channel_i]
@@ -242,6 +253,23 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         feature_obj = Features(data, self.sampling_freq, self.features_id)
         features = feature_obj.extract_features()
         return features
+
+    def update_on_off(self, data):
+        address = {
+            0xF8: self.odin_obj.send_start,
+            0x8F: self.odin_obj.send_stop,
+        }
+        address.get(data[0])()
+        print('updated on/off status...')
+        print(data)
+        # time.sleep(0.04)
+
+    def update_channel_enable(self, data):
+        self.prediction = data[1]
+        self.change_channel_enable()
+        print('updated channel enable...')
+        print(data)
+        # time.sleep(0.04)
 
     def update_threshold_digit(self, data):
         address = {
@@ -256,7 +284,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('updated threshold digits...')
         print(data)
         print(self.stim_threshold)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
     def update_threshold_power(self, data):
         address = {
@@ -274,7 +302,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('updated threshold power...')
         print(data)
         print(self.stim_threshold)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
     def update_threshold(self, channel_id):
         self.stim_threshold[channel_id] = self.stim_threshold_digit[channel_id] * 10 ** self.stim_threshold_power[channel_id]
@@ -283,32 +311,32 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.stim_threshold_upper = data[1]
         print('updated upper threshold...')
         print(data)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
     def update_threshold_lower(self, data):
         self.stim_threshold_lower = data[1]
         print('updated lower threshold...')
         print(data)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
     def update_debounce_delay(self, data):
         self.stim_debounce_delay = data[1]
         print('updated debounce delay...')
         print(data)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
     def update_step_size(self, data):
         self.odin_obj.step_size = data[1]
         print('updated step size...')
         print(data)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
     def update_frequency(self, data):
         self.odin_obj.frequency = data[1]
         self.odin_obj.send_frequency()
         print('updated frequency...')
         print(data)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
     def update_amplitude(self, data):
         address = {
@@ -322,7 +350,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.odin_obj.send_amplitude(channel_id)
         print('updated amplitude...')
         print(data)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
     def update_pulse_duration(self, data):
         address = {
@@ -336,11 +364,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.odin_obj.send_pulse_duration(channel_id)
         print('updated pulse duration...')
         print(data)
-        time.sleep(0.04)
+        # time.sleep(0.04)
 
-    def update_channel_enable(self):
+    def change_channel_enable(self):
         self.odin_obj.channel_enable = self.prediction
         command = self.odin_obj.send_channel_enable()
+        print('sending command to odin...')
+        print(command)
         return command
 
     def check_closed_loop(self):
@@ -389,7 +419,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.odin_obj.get_coefficients()
             self.odin_obj.send_parameters()
             time.sleep(0.04)
-            self.update_channel_enable()
+            self.change_channel_enable()
             # print('thresholds have been reset...')
             # print(self.thresholds)
             time.sleep(0.1)
@@ -405,7 +435,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.start_stimulation_flag = True  # start the stimulation
             self.start_stimulation_initial = True  # to insert initial flag in saved file
             self.odin_obj.send_start_sequence()  # send start bit to odin
-            self.update_channel_enable()  # send a channel enable that is the current prediction
+            self.change_channel_enable()  # send a channel enable that is the current prediction
 
         if self.start_stimulation_flag and not self.pin_stim_obj.input_GPIO():  # send ending sequence to setimulator
             print('stopped stimulation...')

@@ -7,9 +7,9 @@ class ConfigSerial:
         self.ser = None
         self.mode = mode
 
-    def output_serial(self, data):
-        self.ser.write('%d\n' % data)
+    def output_serial(self, data, i=0):
         print('writing data: %d...' % data)
+        self.ser[i].write('%d\n' % data)
         # print('Sent %d...' % data)
 
     def input_serial(self):
@@ -26,14 +26,16 @@ class ConfigSerial:
 
         port = switcher_setup.get(self.mode)
 
+        ser_temp = []
         for x in range(4):
             try:
-                self.ser = serial.Serial(
+                ser_temp = np.append(ser_temp, serial.Serial(
                     port='%s%d' % (port, x),  # Replace ttyS0 with ttyAM0 for Pi1,Pi2,Pi0
                     baudrate=19200,
                     timeout=1
-                )
-                break
+                ))
+                print('Connected to %s%d' % (port, x))
             except serial.serialutil.SerialException:
                 print('No serial port is activated...')
+        self.ser = ser_temp
 
