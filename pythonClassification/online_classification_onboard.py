@@ -37,9 +37,9 @@ PIN_RESET = 12  # HIGH to reset the parameters and send the updated command to s
 PIN_SAVE = 16  # HIGH to stop saving; LOW to start a new csv file to save the counter and stimulation command
 PIN_OFF = 21  # HIGH to close all ports and objects; LOW to start running the program again
 PIN_CLOSED_LOOP = 19  # HIGH for single stimulation channel enable mode; LOW for close-loop step-size up-and-down mode
-METHOD_IO = 'GPIO'  # METHOD for output display
+METHOD_IO = 'serial'  # METHOD for output display
 METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
-THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
+# THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
 
 WINDOW_CLASS = 0.2  # second
 WINDOW_OVERLAP = 0.05  # second
@@ -91,7 +91,6 @@ if __name__ == "__main__":
             thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, stop_event)  # send data to GUI in another thread
             thread_bypass_data.start()  # start thread to bypass data to GUI
 
-
             odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
 
             tcp_ip_sylph.connect()
@@ -104,9 +103,11 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, THRESHOLDS, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
+
+            # saving_obj = Saving()
 
             while True:
                 [buffer_read, buffer_raw] = tcp_ip_sylph.read(buffer_leftover)  # read buffer from socket
@@ -118,6 +119,7 @@ if __name__ == "__main__":
                 if not empty_buffer_flag:
                     data_obj.get_data_channel()  # demultiplex and get the channel data
                     data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
+                    # saving_obj.save(data_obj.data_raw, "a")
 
                 if pin_off_obj.input_GPIO():
                     stop_event.set()  # stop all the other threads

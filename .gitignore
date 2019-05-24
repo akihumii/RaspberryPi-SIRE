@@ -68,3 +68,5 @@ Thumbs.db
 */for_redistribution_files_only/*
 Programs/*
 *.sav
+*.xml
+pythonClassification/.idea/pythonClassification.iml
