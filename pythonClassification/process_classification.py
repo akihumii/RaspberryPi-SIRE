@@ -178,11 +178,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 prediction = 0
                 for i, x in enumerate(self.channel_decode):
                     prediction_temp = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-                    prediction = bitwise_operation.edit_bit(i, prediction_temp, prediction)
-                if prediction != self.prediction:  # if prediction changes
-                    self.output_serial_direct(prediction)
-                    self.prediction = prediction
-                    prediction_changed_flag = True
+                    if prediction_temp != (self.prediction >> i & 1):
+                        self.prediction = bitwise_operation.edit_bit(i, prediction_temp, self.prediction)
+                        self.output_serial_direct(self.prediction, i)
+                        # self.prediction = prediction
+                        prediction_changed_flag = True
             else:
                 for i, x in enumerate(self.channel_decode):
                     try:

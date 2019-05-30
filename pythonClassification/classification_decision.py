@@ -12,6 +12,7 @@ class ClassificationDecision(ConfigGPIO, TcpIp):
         self.method = method
         self.mode = self.mode
         self.obj = []
+        self.serial_len = 0
         self.result = 0
 
     def output(self, channel_index, state, value):
@@ -32,39 +33,34 @@ class ClassificationDecision(ConfigGPIO, TcpIp):
 
         return self.result
 
-    def output_serial_direct(self, data):
+    def output_serial_direct(self, data, index=-1):
         # try:
-            len_ser = len(self.obj.ser)
-            if len_ser == 1:
+            if self.serial_len == 1:
                 self.obj.output_serial(data)
-            elif len_ser == 2:
-                temp = np.zeros(2, dtype=int)
-                if data == 0:
-                    self.obj.output_serial(0, i=0)
-                    self.obj.output_serial(0, i=1)
-                if data >> 0 & 1:
-                    temp[0] = bitwise_operation.set_bit(temp[0], 0)
-                elif data >> 0 & 0:
-                    temp[0] = bitwise_operation.clear_bit(temp[0], 0)
-
-                if data >> 1 & 1:
-                    temp[0] = bitwise_operation.set_bit(temp[0], 2)
-                elif data >> 1 & 0:
-                    temp[0] = bitwise_operation.clear_bit(temp[0], 2)
-
-                if data >> 2 & 1:
-                    temp[1] = bitwise_operation.set_bit(temp[1], 0)
-                elif data >> 2 & 0:
-                    temp[1] = bitwise_operation.clear_bit(temp[1], 0)
-
-                if data >> 3 & 1:
-                    temp[1] = bitwise_operation.set_bit(temp[1], 2)
-
-                elif data >> 3 & 0:
-                    temp[1] = bitwise_operation.clear_bit(temp[1], 2)
-
-                print(temp)
-                [self.obj.output_serial(x, i) for i, x in enumerate(temp)]
+            elif self.serial_len == 2:
+                if index == -1:
+                    [self.obj.output_serial(x, i) for i, x in enumerate([15, 15])]
+                else:
+                    if data >> 0 & 1 and data >> 1 & 1:
+                        self.obj.output_serial(0, 0)
+                        return
+                    if data >> 2 & 1 and data >> 3 & 1:
+                        self.obj.output_serial(0, 1)
+                        return
+                    if index == 0:
+                        if data >> index & 1:
+                            self.obj.output_serial(3, 0)
+                    elif index == 1:
+                        if data >> index & 1:
+                            self.obj.output_serial(15, 0)
+                    elif index == 2:
+                        if data >> index & 1:
+                            self.obj.output_serial(3, 1)
+                    elif index == 3:
+                        if data >> index & 1:
+                            self.obj.output_serial(15, 1)
+            else:
+                pass
 
         # except AttributeError:
         #     print('AttributeError happened...')
@@ -84,6 +80,7 @@ class ClassificationDecision(ConfigGPIO, TcpIp):
         elif self.method == "serial":
             self.obj = ConfigSerial(self.mode)
             self.obj.setup_serial()
+            self.serial_len = len(self.obj.ser)
         else:
             print("Invalid method_io...")
 
