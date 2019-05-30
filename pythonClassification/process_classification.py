@@ -259,14 +259,14 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xF8: self.odin_obj.send_start,
             0x8F: self.odin_obj.send_stop,
         }
-        address.get(data[0])()
+        # address.get(data[0])()
         print('updated on/off status...')
         print(data)
         # time.sleep(0.04)
 
     def update_channel_enable(self, data):
         self.prediction = data[1]
-        self.change_channel_enable()
+        # self.change_channel_enable()
         print('updated channel enable...')
         print(data)
         # time.sleep(0.04)
@@ -333,7 +333,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def update_frequency(self, data):
         self.odin_obj.frequency = data[1]
-        self.odin_obj.send_frequency()
+        # self.odin_obj.send_frequency()
         print('updated frequency...')
         print(data)
         # time.sleep(0.04)
@@ -347,7 +347,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         }
         channel_id = address.get(data[0])
         self.odin_obj.amplitude[channel_id] = data[1]
-        self.odin_obj.send_amplitude(channel_id)
+        # self.odin_obj.send_amplitude(channel_id)
         print('updated amplitude...')
         print(data)
         # time.sleep(0.04)
@@ -361,7 +361,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         }
         channel_id = address.get(data[0])
         self.odin_obj.pulse_duration[channel_id] = data[1]
-        self.odin_obj.send_pulse_duration(channel_id)
+        # self.odin_obj.send_pulse_duration(channel_id)
         print('updated pulse duration...')
         print(data)
         # time.sleep(0.04)
@@ -378,7 +378,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.flag_closed_loop = True
             if not np.array(self.odin_obj.channel_enable).all():
                 self.odin_obj.channel_enable = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 3    # enable all channels after toggling to closed-loop mode
-                self.odin_obj.send_channel_enable()
+                # self.odin_obj.send_channel_enable()
             print('switched to closed-loop mode...')
             time.sleep(0.1)
 

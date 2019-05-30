@@ -9,6 +9,7 @@ from process_classification import ProcessClassification
 from command_odin import CommandOdin
 from config_GPIO import ConfigGPIO
 from bypass_data import BypassData
+from odin_command_handler import OdinCommandHandler
 from saving import Saving
 
 IP_SYLPH = "127.0.0.1"
@@ -83,12 +84,14 @@ if __name__ == "__main__":
 
             raw_buffer_queue = multiprocessing.Queue()  # saved the raw buffer to send to GUI
             change_parameter_queue = multiprocessing.Queue()  # to save the signal for parameter changing
+            odin_command_queue = multiprocessing.Queue()  # store odin command sent from Odin GUI
+
 
             tcp_ip_sylph = TcpIp(IP_SYLPH, PORT_SYLPH, BUFFER_SIZE)  # create sylph socket object
             tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, BUFFER_SIZE_SENDING)  # create odin socket object
             tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, BUFFER_SIZE_SENDING)  # create gui socket object
 
-            thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, stop_event)  # send data to GUI in another thread
+            thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, odin_command_queue, change_parameter_event, stop_event)  # send data to GUI in another thread
             thread_bypass_data.start()  # start thread to bypass data to GUI
 
             odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
@@ -100,6 +103,9 @@ if __name__ == "__main__":
             ring_event.clear()
 
             ring_queue = multiprocessing.Queue()  # saved data across threads
+
+            thread_odin_command_handler = OdinCommandHandler(odin_obj, change_parameter_event, odin_command_queue)
+            thread_odin_command_handler.start()  # start thread to send command received from odin GUI to stimulator
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
@@ -125,6 +131,7 @@ if __name__ == "__main__":
                     stop_event.set()  # stop all the other threads
 
                     thread_bypass_data.join()
+                    thread_odin_command_handler.join()
                     thread_process_classification.join()
 
                     tcp_ip_sylph.write_disconnect()

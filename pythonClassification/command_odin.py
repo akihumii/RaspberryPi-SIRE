@@ -21,8 +21,8 @@ class CommandOdin:
             'threshold_enable':     0xFE,
         }
 
-        self.command_start = self._convert_to_char([0xF8, 0xF8])
-        self.command_stop = self._convert_to_char([0x8F, 0x8F])
+        self.command_start = self.convert_to_char([0xF8, 0xF8])
+        self.command_stop = self.convert_to_char([0x8F, 0x8F])
 
         self.num_channel = 4
 
@@ -84,26 +84,26 @@ class CommandOdin:
         if amplitude > 240:  # set a upper limit
             amplitude = 240
 
-        self.sock.send(self._convert_to_char([address, amplitude]))
+        self.sock.send(self.convert_to_char([address, amplitude]))
 
     def send_pulse_duration(self, channel):
         address = self.address.get('pulse_duration_ch%d' % int(channel+1))
-        self.sock.send(self._convert_to_char([address, self.pulse_duration[channel]]))
-        # self.sock.send(self._convert_to_char([address, self._get_pulse_duration_byte([channel])]))
+        self.sock.send(self.convert_to_char([address, self.pulse_duration[channel]]))
+        # self.sock.send(self.convert_to_char([address, self._get_pulse_duration_byte([channel])]))
 
     def send_frequency(self):
         address = self.address.get('frequency')
-        self.sock.send(self._convert_to_char([address, self.frequency]))
+        self.sock.send(self.convert_to_char([address, self.frequency]))
 
     def send_channel_enable(self):
         address = self.address.get('channel_enable')
-        self.sock.send(self._convert_to_char([address, self.channel_enable]))
+        self.sock.send(self.convert_to_char([address, self.channel_enable]))
         return [address, self.channel_enable]
 
     def send_step_size_increase(self):
         print('sending step size increase commands...')
         address = self.address.get('step_increase')
-        self.sock.send(self._convert_to_char([address, self.step_size]))
+        self.sock.send(self.convert_to_char([address, self.step_size]))
         return [address, self.step_size]
 
     def get_coefficients(self):
@@ -129,7 +129,7 @@ class CommandOdin:
             output = int(output)
         return output
 
-    def _convert_to_char(self, data):
+    def convert_to_char(self, data):
         output = [chr(int(x)) for x in data]
         output = ''.join(output)
         return output
