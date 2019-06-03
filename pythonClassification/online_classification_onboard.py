@@ -61,9 +61,8 @@ def wave_signal(number, flag):
             4: 4,
             5: 0,
             6: 12,
-            7: 13,
-            8: 14,
-            9: 15
+            7: 14,
+            8: 15
         }
         serial_obj.output_serial_direct(action_dic.get(number), 0)
 
@@ -71,13 +70,13 @@ def wave_signal(number, flag):
             flag = True
 
         if flag:
-            if number >= 9:
+            if number >= 8:
                 number = 1
                 flag = False
             else:
                 number += 1
         else:
-            if number >= 8:
+            if number >= 7:
                 number = 1
             else:
                 number += 1
