@@ -52,16 +52,37 @@ LP_THRESH = 0
 NOTCH_THRESH = 50
 
 
-def wave_signal(number):
+def wave_signal(number, flag):
     if not count % 2:
-        if number == 4:
-            serial_obj.output_serial_direct(2, 0)
-            number = 2
-        else:
-            serial_obj.output_serial_direct(4, 0)
-            number = 4
+        action_dic = {
+            1: 2,
+            2: 4,
+            3: 2,
+            4: 4,
+            5: 0,
+            6: 12,
+            7: 13,
+            8: 14,
+            9: 15
+        }
+        serial_obj.output_serial_direct(action_dic.get(number), 0)
 
-    return number
+        if not count % 180:
+            flag = True
+
+        if flag:
+            if number >= 9:
+                number = 1
+                flag = False
+            else:
+                number += 1
+        else:
+            if number >= 8:
+                number = 1
+            else:
+                number += 1
+
+    return number, flag
 
 
 if __name__ == "__main__":
@@ -88,7 +109,8 @@ if __name__ == "__main__":
     serial_obj = ClassificationDecision(METHOD_IO, PIN_LED, 'out', ROBOT_HAND_OUTPUT)
     serial_obj.setup()
 
-    current_sign = 4
+    current_sign = 1
+    hidden_flag = False
 
     while True:
         if not pin_off_obj.input_GPIO():
@@ -162,7 +184,7 @@ if __name__ == "__main__":
 
         else:
             print('transfer code sleeping... %d...' % count)
-            current_sign = wave_signal(current_sign)
+            [current_sign, hidden_flag] = wave_signal(current_sign, hidden_flag)
             time.sleep(1)
             count += 1
 
