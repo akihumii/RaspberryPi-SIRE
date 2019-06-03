@@ -127,31 +127,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 # self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
 
                 # print('start classifying...')
+                command_temp = 0
                 if self.start_classify_flag:
                     command_temp = self.classify()  # do the prediction and the display it
 
                     if not self.flag_save_new:
-                        command_array = np.zeros([np.size(self.data, 0), 13])  # create an empty command array
-                        command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
-                        if self.start_stimulation_initial:
-                            command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
-                            self.start_stimulation_initial = False
-                        elif self.stop_stimulation_initial:
-                            command_array[1, 0] = self.stop_stimulation_address  # replace the second row first column with starting address
-                            self.stop_stimulation_initial = False
+                        self.save_file(command_temp)
 
-                        command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
-                        if self.start_stimulation_flag:
-                            command_array[:, 3:7] = self.odin_obj.amplitude
-                            command_array[:, 7:11] = self.odin_obj.pulse_duration
-                            command_array[:, 11] = self.odin_obj.frequency
-                            command_array[:, 12] = self.odin_obj.step_size
-                        else:
-                            command_array[:, 3:] = 0
-
-                        # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
-
-                        self.saving_file.save(np.hstack([self.data, command_array]), "a")  # save the counter and the command
                 # print('stop classifying...')
             if self.stop_event.is_set():
                 break
@@ -214,6 +196,30 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
             else:
                 return [0, 0]
+
+    def save_file(self, command_temp):
+        command_array = np.zeros([np.size(self.data, 0), 13])  # create an empty command array
+        command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
+        if self.start_stimulation_initial:
+            command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
+            self.start_stimulation_initial = False
+        elif self.stop_stimulation_initial:
+            command_array[1, 0] = self.stop_stimulation_address  # replace the second row first column with starting address
+            self.stop_stimulation_initial = False
+
+        if self.start_stimulation_flag:
+            command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
+        else:
+            command_array[:, 2] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
+
+        command_array[:, 3:7] = self.odin_obj.amplitude
+        command_array[:, 7:11] = self.odin_obj.pulse_duration
+        command_array[:, 11] = self.odin_obj.frequency
+        command_array[:, 12] = self.odin_obj.step_size
+
+        # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
+
+        self.saving_file.save(np.hstack([self.data, command_array]), "a")  # save the counter and the command
 
     def serial_output_PSS(self):
         for i, x in enumerate(self.channel_decode):
