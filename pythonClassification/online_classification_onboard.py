@@ -9,6 +9,7 @@ from process_classification import ProcessClassification
 from command_odin import CommandOdin
 from config_GPIO import ConfigGPIO
 from bypass_data import BypassData
+from classification_decision import ClassificationDecision
 from saving import Saving
 
 IP_SYLPH = "127.0.0.1"
@@ -50,6 +51,19 @@ HP_THRESH = 100
 LP_THRESH = 0
 NOTCH_THRESH = 50
 
+
+def wave_signal(number):
+    if not count % 2:
+        if number == 4:
+            serial_obj.output_serial_direct(2, 0)
+            number = 2
+        else:
+            serial_obj.output_serial_direct(4, 0)
+            number = 4
+
+    return number
+
+
 if __name__ == "__main__":
     pin_stim_obj = ConfigGPIO(PIN_STIM, 'in')
     pin_stim_obj.setup_GPIO()
@@ -70,6 +84,11 @@ if __name__ == "__main__":
     pin_off_obj.setup_GPIO()
 
     count = 1
+
+    serial_obj = ClassificationDecision(METHOD_IO, PIN_LED, 'out', ROBOT_HAND_OUTPUT)
+    serial_obj.setup()
+
+    current_sign = 4
 
     while True:
         if not pin_off_obj.input_GPIO():
@@ -143,6 +162,7 @@ if __name__ == "__main__":
 
         else:
             print('transfer code sleeping... %d...' % count)
+            current_sign = wave_signal(current_sign)
             time.sleep(1)
             count += 1
 
