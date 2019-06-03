@@ -37,14 +37,18 @@ class ClassificationDecision(ConfigGPIO, TcpIp):
     def output_serial_direct(self, data, index=-1):
         # try:
             if self.serial_len == 1:
-                self.obj.output_serial(data)
+                if self.robot_hand_output == 'combo':
+                    self.combo(data, index)
+                else:
+                    self.obj.output_serial(data)
             elif self.serial_len == 2:
                 if index == -1:
                     [self.obj.output_serial(x, i) for i, x in enumerate([15, 15])]
                 else:
                     hand_dic = {
                         'PSS': self.PSS,
-                        '4F': self.four_fingers
+                        '4F': self.four_fingers,
+                        'combo': self.combo
                     }
                     hand_dic.get(self.robot_hand_output)(data, index)
             else:
@@ -79,6 +83,28 @@ class ClassificationDecision(ConfigGPIO, TcpIp):
         }
 
         switcher_output.get(self.method)()
+
+    def combo(self, data, index):
+        print('converting %d' % data)
+        action_dic = {
+            0: 0,
+            1: 3,
+            2: 31,
+            3: 21,
+            4: 16,
+            5: 7,
+            6: 24,
+            7: 17,
+            8: 1,
+            9: 19,
+            10: 14,
+            11: 27,
+            12: 8,
+            13: 9,
+            14: 25,
+            15: 2
+        }
+        [self.obj.output_serial(action_dic.get(data), i) for i in range(self.serial_len)]
 
     def PSS(self, data, index):  # paper-sicissors-stone settings
         if data >> 0 & 1 and data >> 1 & 1:

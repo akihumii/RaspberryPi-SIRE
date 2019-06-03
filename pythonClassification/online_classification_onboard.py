@@ -39,7 +39,7 @@ PIN_OFF = 21  # HIGH to close all ports and objects; LOW to start running the pr
 PIN_CLOSED_LOOP = 19  # HIGH for single stimulation channel enable mode; LOW for close-loop step-size up-and-down mode
 METHOD_IO = 'serial'  # METHOD for output display
 METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
-ROBOT_HAND_OUTPUT = '4F'  # input 'PSS' or '4F'
+ROBOT_HAND_OUTPUT = 'combo'  # input 'PSS' or '4F' or 'combo'
 # THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
 
 WINDOW_CLASS = 0.2  # second

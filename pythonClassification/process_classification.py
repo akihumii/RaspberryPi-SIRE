@@ -178,10 +178,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         else:
             if self.method_io == 'serial':
                 output_dic = {
-                    'PSS': self.serial_output_PSS(),
-                    '4F': self.serial_output_4F()
+                    'PSS': self.serial_output_PSS,
+                    '4F': self.serial_output_4F,
+                    'combo': self.serial_output_4F
                 }
-                prediction_changed_flag = output_dic.get(self.robot_hand_output)
+                prediction_changed_flag = output_dic.get(self.robot_hand_output)()
             else:
                 for i, x in enumerate(self.channel_decode):
                     try:
