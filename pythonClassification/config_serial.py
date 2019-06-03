@@ -1,5 +1,6 @@
 import numpy as np
 import serial
+import sys, errno
 
 
 class ConfigSerial:
@@ -8,8 +9,11 @@ class ConfigSerial:
         self.mode = mode
 
     def output_serial(self, data, i=0):
-        print('writing data: %d...' % data)
-        self.ser[i].write('%d\n' % data)
+        print('writing data %d: %d...' % (i, data))
+        try:
+            self.ser[i].write('%d\n' % data)
+        except serial.SerialException:
+            print('failed to send data %d\n' % data)
         # print('Sent %d...' % data)
 
     def input_serial(self):

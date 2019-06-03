@@ -9,6 +9,7 @@ from process_classification import ProcessClassification
 from command_odin import CommandOdin
 from config_GPIO import ConfigGPIO
 from bypass_data import BypassData
+from classification_decision import ClassificationDecision
 from saving import Saving
 
 IP_SYLPH = "127.0.0.1"
@@ -39,6 +40,7 @@ PIN_OFF = 21  # HIGH to close all ports and objects; LOW to start running the pr
 PIN_CLOSED_LOOP = 19  # HIGH for single stimulation channel enable mode; LOW for close-loop step-size up-and-down mode
 METHOD_IO = 'serial'  # METHOD for output display
 METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
+ROBOT_HAND_OUTPUT = 'combo'  # input 'PSS' or '4F' or 'combo'
 # THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
 
 WINDOW_CLASS = 0.2  # second
@@ -48,6 +50,40 @@ SAMPLING_FREQ = 1250  # sample/second
 HP_THRESH = 100
 LP_THRESH = 0
 NOTCH_THRESH = 50
+
+
+def wave_signal(number, flag):
+    if not count % 2:
+        action_dic = {
+            1: 2,
+            2: 4,
+            3: 2,
+            4: 4,
+            5: 0,
+            6: 12,
+            7: 13,
+            8: 14,
+            9: 15
+        }
+        serial_obj.output_serial_direct(action_dic.get(number), 0)
+
+        if not count % 180:
+            flag = True
+
+        if flag:
+            if number >= 9:
+                number = 1
+                flag = False
+            else:
+                number += 1
+        else:
+            if number >= 8:
+                number = 1
+            else:
+                number += 1
+
+    return number, flag
+
 
 if __name__ == "__main__":
     pin_stim_obj = ConfigGPIO(PIN_STIM, 'in')
@@ -69,6 +105,12 @@ if __name__ == "__main__":
     pin_off_obj.setup_GPIO()
 
     count = 1
+
+    serial_obj = ClassificationDecision(METHOD_IO, PIN_LED, 'out', ROBOT_HAND_OUTPUT)
+    serial_obj.setup()
+
+    current_sign = 1
+    hidden_flag = False
 
     while True:
         if not pin_off_obj.input_GPIO():
@@ -103,7 +145,7 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, ROBOT_HAND_OUTPUT, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 
@@ -142,6 +184,7 @@ if __name__ == "__main__":
 
         else:
             print('transfer code sleeping... %d...' % count)
+            [current_sign, hidden_flag] = wave_signal(current_sign, hidden_flag)
             time.sleep(1)
             count += 1
 
