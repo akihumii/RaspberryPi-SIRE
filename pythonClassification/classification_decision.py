@@ -7,13 +7,14 @@ import numpy as np
 
 
 class ClassificationDecision(ConfigGPIO, TcpIp):
-    def __init__(self, method, pin_led, mode):
+    def __init__(self, method, pin_led, mode, robot_hand_output='4F'):
         ConfigGPIO.__init__(self, pin_led, mode)
         self.method = method
         self.mode = self.mode
         self.obj = []
         self.serial_len = 0
         self.result = 0
+        self.robot_hand_output = robot_hand_output
 
     def output(self, channel_index, state, value):
         if state:
@@ -41,24 +42,11 @@ class ClassificationDecision(ConfigGPIO, TcpIp):
                 if index == -1:
                     [self.obj.output_serial(x, i) for i, x in enumerate([15, 15])]
                 else:
-                    if data >> 0 & 1 and data >> 1 & 1:
-                        self.obj.output_serial(0, 0)
-                        return
-                    if data >> 2 & 1 and data >> 3 & 1:
-                        self.obj.output_serial(0, 1)
-                        return
-                    if index == 0:
-                        if data >> index & 1:
-                            self.obj.output_serial(3, 0)
-                    elif index == 1:
-                        if data >> index & 1:
-                            self.obj.output_serial(15, 0)
-                    elif index == 2:
-                        if data >> index & 1:
-                            self.obj.output_serial(3, 1)
-                    elif index == 3:
-                        if data >> index & 1:
-                            self.obj.output_serial(15, 1)
+                    hand_dic = {
+                        'PSS': self.PSS,
+                        '4F': self.four_fingers
+                    }
+                    hand_dic.get(self.robot_hand_output)(data, index)
             else:
                 pass
 
@@ -91,6 +79,50 @@ class ClassificationDecision(ConfigGPIO, TcpIp):
         }
 
         switcher_output.get(self.method)()
+
+    def PSS(self, data, index):  # paper-sicissors-stone settings
+        if data >> 0 & 1 and data >> 1 & 1:
+            self.obj.output_serial(0, 0)
+            return
+        if data >> 2 & 1 and data >> 3 & 1:
+            self.obj.output_serial(0, 1)
+            return
+        if index == 0:
+            if data >> index & 1:
+                self.obj.output_serial(3, 0)
+        elif index == 1:
+            if data >> index & 1:
+                self.obj.output_serial(15, 0)
+        elif index == 2:
+            if data >> index & 1:
+                self.obj.output_serial(3, 1)
+        elif index == 3:
+            if data >> index & 1:
+                self.obj.output_serial(15, 1)
+
+    def four_fingers(self, data, index):
+        temp = 0
+        if data >> 0 & 1:
+            temp = bitwise_operation.set_bit(temp, 0)
+        elif data >> 0 & 0:
+            temp = bitwise_operation.clear_bit(temp, 0)
+        if data >> 1 & 1:
+            temp = bitwise_operation.set_bit(temp, 2)
+        elif data >> 1 & 0:
+            temp = bitwise_operation.clear_bit(temp, 2)
+        self.obj.output_serial(temp, 0)
+
+        temp = 0
+        if data >> 2 & 1:
+            temp = bitwise_operation.set_bit(temp, 0)
+        elif data >> 2 & 0:
+            temp = bitwise_operation.clear_bit(temp, 0)
+        if data >> 3 & 1:
+            temp = bitwise_operation.set_bit(temp, 2)
+        elif data >> 3 & 0:
+            temp = bitwise_operation.clear_bit(temp, 2)
+        self.obj.output_serial(temp, 1)
+
 
 
 

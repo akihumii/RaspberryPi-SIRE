@@ -9,7 +9,7 @@ class ConfigSerial:
         self.mode = mode
 
     def output_serial(self, data, i=0):
-        print('writing data: %d...' % data)
+        print('writing data %d: %d...' % (i, data))
         try:
             self.ser[i].write('%d\n' % data)
         except serial.SerialException:

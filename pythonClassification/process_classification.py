@@ -10,9 +10,9 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event):
+    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, robot_hand_output, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event):
         multiprocessing.Process.__init__(self)
-        ClassificationDecision.__init__(self, method_io, pin_led, 'out')
+        ClassificationDecision.__init__(self, method_io, pin_led, 'out', robot_hand_output)
 
         self.clf = None
         self.window_class = window_class  # seconds
@@ -24,6 +24,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.pin_stim_obj = pin_stim_obj
         self.pin_sm_channel_obj = pin_sm_channel_obj
         self.method_io = method_io
+
+        self.robot_hand_output = robot_hand_output
 
         method_classify_all = {
             'features': self.classify_features,
@@ -175,14 +177,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             #     print('prediction failed...')
         else:
             if self.method_io == 'serial':
-                prediction = 0
-                for i, x in enumerate(self.channel_decode):
-                    prediction_temp = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-                    if prediction_temp != (self.prediction >> i & 1):
-                        self.prediction = bitwise_operation.edit_bit(i, prediction_temp, self.prediction)
-                        self.output_serial_direct(self.prediction, i)
-                        # self.prediction = prediction
-                        prediction_changed_flag = True
+                output_dic = {
+                    'PSS': self.serial_output_PSS(),
+                    '4F': self.serial_output_4F()
+                }
+                prediction_changed_flag = output_dic.get(self.robot_hand_output)
             else:
                 for i, x in enumerate(self.channel_decode):
                     try:
@@ -214,6 +213,25 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
             else:
                 return [0, 0]
+
+    def serial_output_PSS(self):
+        for i, x in enumerate(self.channel_decode):
+            prediction_temp = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+            if prediction_temp != (self.prediction >> i & 1):
+                self.prediction = bitwise_operation.edit_bit(i, prediction_temp, self.prediction)
+                self.output_serial_direct(self.prediction, i)
+                # self.prediction = prediction
+                return True
+
+    def serial_output_4F(self):
+        prediction = 0
+        for i, x in enumerate(self.channel_decode):
+            prediction_temp = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+            prediction = bitwise_operation.edit_bit(i, prediction_temp, prediction)
+        if prediction != self.prediction:  # if prediction changes
+            self.output_serial_direct(prediction, 0)
+            self.prediction = prediction
+            return True
 
     def load_classifier(self):
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
