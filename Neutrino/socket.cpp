@@ -1,40 +1,36 @@
-#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <sys/types.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/socket.h>
+#include <fcntl.h>
+#include <time.h>
+
+#include <wiringPi.h>
 #include <pthread.h>
-#include <arpa/inet.h>
 #include <termios.h>
 #include <unistd.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include "fcntl.h"
-#include <time.h>
+
+#include <arpa/inet.h>
 #include <netinet/tcp.h>
-#include <wiringPi.h>
+
 #include "../common/wiringpi-serial.h"
 #include "../common/easylogging++.h"
 #include "../common/ringbuffer.h"
 #include "../common/parallel-gpio.h"
 
-#define _GNU_SOURCE
-
 #define BUFFER_SIZE 160
 #define BUFFER_SIZE_2 3200
 #define SOCKET_SERVER_PORT 8888
-// #define FPGA_CLOCK_SPEED 19200
 
 #define CLK_PIN 21      // physical pin 29
-#define CTS_PIN 3      // physical pin 15
 #define CMD_GATE_PIN 23 // physical pin 33
 
 INITIALIZE_EASYLOGGINGPP
-
-int socket_desc, client_sock, c, read_size, flag = 1, count = 0, read_len, write_len, retx_count = 0, odin_socket;
-int sync_len = 0, syncIndex = 0;
 
 struct sockaddr_in server, client, odin_addr;
 
@@ -44,25 +40,27 @@ unsigned char buf_cmd[32];
 unsigned char buf_sync[BUFFER_SIZE];
 unsigned char buf_sync_cmd[32];
 
-bool read_bool = 0;
-int recv_count = 0;
-
-bool isFrDetected = false;
-uint8_t counter = 0;
-int counterIndex = 0;
-
 WiringPiSerial *fd;
 ParallelGPIO *data_stream;
+BITMODE bitmode = BITMODE_8;
 
 ringbuffer<uint8_t> *rb_wifi;
 ringbuffer<uint8_t> *rb_sync;
 
-pthread_t tid[4];
+pthread_t thread[3];
 pthread_mutex_t lock_rb_wifi, lock_data;
 
-BITMODE selectedMode = BITMODE_8;
+int socket_desc, client_sock, c, read_size, flag = 1, count = 0, read_len, write_len, retx_count = 0, odin_socket;
+int sync_len = 0, syncIndex = 0;
 
-static int findSyncPulse(unsigned char* buf, int len){
+int recv_count = 0;
+bool is_read_data = 0;
+
+bool is_fr_detected = false;
+uint8_t counter = 0;
+int counter_index = 0;
+
+static int find_sync_pulse(unsigned char* buf, int len){
     int i = 0;
     if(data_stream->getBitMode() == BITMODE_8){
         for(i = 0; i < len-4; i++){
@@ -81,17 +79,7 @@ static int findSyncPulse(unsigned char* buf, int len){
     return -1;
 }
 
-void slotSyncPulse(){
-    syncIndex = findSyncPulse(buf_sync, BUFFER_SIZE);
-    if(syncIndex != -1){
-        buf_sync[syncIndex] = 255;
-        sync_len = 0;
-        syncIndex = -1;
-        memset(buf_sync_cmd, '\0', 32);
-    }
-}
-
-static void acceptConnection(void){
+static void accept_connection(void){
     client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t *)&c);
     // fcntl(client_sock, F_SETFL, O_NONBLOCK);
     setsockopt(client_sock, IPPROTO_TCP, TCP_NODELAY, (void *)&flag, sizeof(flag));
@@ -103,7 +91,7 @@ static void acceptConnection(void){
     LOG(INFO) << ", \"event\":\"Accepting:\", \"errnum\":0, \"msg\":\"Socket connected!\"";
 }
 
-static void connectOdin(void){
+static void connect_odin(void){
     odin_socket = socket(AF_INET , SOCK_STREAM , 0);
     if(odin_socket < 0){
         fprintf(stdout, "Failed to create Odin socket\n");
@@ -127,7 +115,7 @@ static void connectOdin(void){
     setsockopt(odin_socket, IPPROTO_TCP, TCP_NODELAY, (void *)&flag, sizeof(flag));
 }
 
-static void waitForSylph(void){
+static void wait_for_sylph(void){
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
 
     if(socket_desc == -1){
@@ -153,10 +141,21 @@ static void waitForSylph(void){
 
     c = sizeof(struct sockaddr_in);
 
-    acceptConnection();
+    accept_connection();
 }
 
-void initRecvDataParam(){
+int stick_thread_to_core(pthread_t* thread, int core_id) {
+    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (core_id < 0 || core_id >= num_cores){
+        return EINVAL;
+    }
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+    return pthread_setaffinity_np(*thread, sizeof(cpu_set_t), &cpuset);
+}
+
+void init_recv_data_task(){
     data_stream = new ParallelGPIO();
     data_stream->Init();
     data_stream->resetFPGA();
@@ -171,13 +170,12 @@ void initRecvDataParam(){
         fprintf(stdout, "clk speed: 38400\n");
     }
 
-    // clk_speed =19200;
     fd = new WiringPiSerial("/dev/serial0", clk_speed);
     fd->Init();
     recv_count = 0;
 }
 
-void setupCmdSettings(){
+void setup_cmd_settings(){
     switch(buf_cmd[6]){
         case 180:
         case 181:
@@ -185,7 +183,7 @@ void setupCmdSettings(){
             data_stream->resetFPGA();
             rb_wifi->resetBuffer();
             rb_sync->resetBuffer();
-            read_bool = true;
+            is_read_data = true;
             data_stream->setBitMode(BITMODE_5);
             break;
         case 36:
@@ -197,22 +195,22 @@ void setupCmdSettings(){
             data_stream->resetFPGA();
             rb_wifi->resetBuffer();
             rb_sync->resetBuffer();
-            read_bool = true;
+            is_read_data = true;
             data_stream->setBitMode(BITMODE_8);
             break;
         default:
-            read_bool = false;
+            is_read_data = false;
             data_stream->setBitMode(BITMODE_8);
             LOG(INFO) << ", \"event\":\"Stop Reading:\", \"errnum\":0, \"msg\":\"Stop Reading!\"";
     }
 }
 
-void sendCmd(){
+void write_cmd(){
     if(buf_cmd[0] == 50){
         fprintf(stdout, "Disconnect signal received!\n");
         close(client_sock);
         client_sock = -1;
-        acceptConnection();
+        accept_connection();
     }
     else{
         if(fd->SimpleWrite(buf_cmd, recv_count) < 0){
@@ -225,61 +223,61 @@ void sendCmd(){
     }
 }
 
-bool verifyCounter(){
-    if (isFrDetected == false){
-        // findSyncPulse returns sync pulse index, so can calculate counter index based on that
+bool verify_counter(){
+    if (is_fr_detected == false){
+        // find_sync_pulse returns sync pulse index, so can calculate counter index based on that
         if (data_stream->getBitMode() == BITMODE_8){
-            counterIndex = findSyncPulse(buf_in, BUFFER_SIZE) - 3;
+            counter_index = find_sync_pulse(buf_in, BUFFER_SIZE) - 3;
         }
         else{
-            counterIndex = findSyncPulse(buf_in, BUFFER_SIZE) - 7;
+            counter_index = find_sync_pulse(buf_in, BUFFER_SIZE) - 7;
         }
 
-        if (counterIndex != -1){
-            counter = buf_in[counterIndex];
-            isFrDetected = true;
+        if (counter_index != -1){
+            counter = buf_in[counter_index];
+            is_fr_detected = true;
         }
         else {
-            return isFrDetected;
+            return is_fr_detected;
         }
     }
 
-    while(counterIndex < BUFFER_SIZE){
-        if (counter != buf_in[counterIndex]){
-            printf("err counter index read: %d %d\n", counter, buf_in[counterIndex]);
-            isFrDetected = false;
+    while(counter_index < BUFFER_SIZE){
+        if (counter != buf_in[counter_index]){
+            printf("err counter index read: %d %d\n", counter, buf_in[counter_index]);
+            is_fr_detected = false;
             break;
         }
 
         if (data_stream->getBitMode() == BITMODE_8){
             counter = (counter + 2) % 256;
-            counterIndex += 16;
+            counter_index += 16;
         }
         else{
             counter = (counter + 2) % 32;
-            counterIndex += 32;
+            counter_index += 32;
         }
     }
-    counterIndex = counterIndex % BUFFER_SIZE;
+    counter_index = counter_index % BUFFER_SIZE;
 
-    if (!isFrDetected){
+    if (!is_fr_detected){
         for (int i = 0; i < BUFFER_SIZE; i ++){
             printf("%d ", buf_in[i]);
         }
         printf("\n ");
     }
 
-    return isFrDetected;
+    return is_fr_detected;
 
 }
 
-void storeData(){
+void store_data(){
     pthread_mutex_lock(&lock_data);
     data_stream->SafeRead(buf_in, BUFFER_SIZE);
     pthread_mutex_unlock(&lock_data);
 
-    // for debugging, use the following cond instead
-    // if ((verifyCounter()) && (rb_wifi->getFree() > BUFFER_SIZE+1)){
+    // for debugging, use the following if condition instead
+    // if ((verify_counter()) && (rb_wifi->getFree() > BUFFER_SIZE+1)){
     if (rb_wifi->getFree() > BUFFER_SIZE+1){
         pthread_mutex_lock(&lock_rb_wifi);
         rb_wifi->write(buf_in, BUFFER_SIZE);
@@ -287,31 +285,28 @@ void storeData(){
     }
 }
 
-void initGpioPin(){
-    fprintf(stdout, "Initialize gpio...\n");
+void init_gpio_pin(){
     wiringPiSetup();
-    pinMode (23, OUTPUT) ;
-    pinMode (3, OUTPUT) ;
+    pinMode (CMD_GATE_PIN, OUTPUT) ;
+    // pinMode (CTS_PIN, OUTPUT) ;
     digitalWrite(CMD_GATE_PIN,LOW);
     delay(100);
     digitalWrite(CMD_GATE_PIN,LOW);
-    // digitalWrite(CMD_GATE_PIN,HIGH);
-    fprintf(stdout, "Gpio initialised.\n");
 }
 
 // FPGA -> internal buffer
-void *recvData(void *arg){
-    initRecvDataParam();
+void *recv_data(void *arg){
+    init_recv_data_task();
 
     while(1){
-        if(read_bool){
-            storeData();
+        if(is_read_data){
+            store_data();
         }
     }
 }
 
 // internal buffer -> wifi out
-void *sendWiFi(void *arg){
+void *send_wifi(void *arg){
     while(1){
         if(rb_wifi->getOccupied() > BUFFER_SIZE_2+1){
             pthread_mutex_lock(&lock_rb_wifi);
@@ -328,61 +323,50 @@ void *sendWiFi(void *arg){
 }
 
 // wifi in -> FPGA
-void *recvWiFi(void *arg){
+void *recv_wifi(void *arg){
     while(1){
         recv_count = recv(client_sock, &buf_cmd, 32, 0);
         if(recv_count > 0){
-            // read_bool = false;
+            is_read_data = false;
             digitalWrite(CMD_GATE_PIN,HIGH);
-            usleep(200000);
+            usleep(100000);
             pthread_mutex_lock(&lock_data);
             data_stream->setClockTuneMode(false);
-            setupCmdSettings();
-            sendCmd();
+            setup_cmd_settings();
+            write_cmd();
             pthread_mutex_unlock(&lock_data);
-            usleep(200000);
+            usleep(100000);
             digitalWrite(CMD_GATE_PIN,LOW);
         }
     }
 }
 
-int stick_thread_to_core(pthread_t* thread, int core_id) {
-   int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-   if (core_id < 0 || core_id >= num_cores){
-      return EINVAL;
-   }
-   cpu_set_t cpuset;
-   CPU_ZERO(&cpuset);
-   CPU_SET(core_id, &cpuset);
-   return pthread_setaffinity_np(*thread, sizeof(cpu_set_t), &cpuset);
-}
-
-void mainInit(){
-    initGpioPin();
+void init_main(){
+    init_gpio_pin();
     rb_wifi = new ringbuffer<uint8_t>(BUFFER_SIZE_2 * 1000);    // ~3.2MB, overkill imo
     rb_sync = new ringbuffer<uint8_t>(BUFFER_SIZE * 10);        // ~1.6KB, unused rn
     pthread_mutex_init(&lock_rb_wifi, NULL);
     pthread_mutex_init(&lock_data, NULL);
 }
 
-void initAllThreads(){
-    pthread_create(&(tid[0]), NULL, &recvData, NULL);
-    pthread_create(&(tid[1]), NULL, &recvWiFi, NULL);
-    pthread_create(&(tid[2]), NULL, &sendWiFi, NULL);
+void init_all_threads(){
+    pthread_create(&(thread[0]), NULL, &recv_data, NULL);
+    pthread_create(&(thread[1]), NULL, &recv_wifi, NULL);
+    pthread_create(&(thread[2]), NULL, &send_wifi, NULL);
 
-    stick_thread_to_core(&(tid[0]),1);
-    stick_thread_to_core(&(tid[1]),2);
-    stick_thread_to_core(&(tid[2]),3);
+    stick_thread_to_core(&(thread[0]),1);
+    stick_thread_to_core(&(thread[1]),2);
+    stick_thread_to_core(&(thread[2]),3);
 
-    for(int i = 0; i < 4; i++){
-        pthread_join(tid[i], NULL);
+    for(int i = 0; i < 3; i++){
+        pthread_join(thread[i], NULL);
     }
 }
 
 int main(int argc, char *argv[]){
-    mainInit();
-    waitForSylph();
-    initAllThreads();
-    
+    init_main();
+    wait_for_sylph();
+    init_all_threads();
+
     return 0;
 }
