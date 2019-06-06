@@ -319,6 +319,9 @@ void *send_wifi(void *arg){
                 }
             }
         }
+        else{
+            usleep(100000);
+        }
     }
 }
 
