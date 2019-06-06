@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,10 +20,16 @@
 #include "../common/ringbuffer.h"
 #include "../common/parallel-gpio.h"
 
+#define _GNU_SOURCE
+
 #define BUFFER_SIZE 160
 #define BUFFER_SIZE_2 3200
 #define SOCKET_SERVER_PORT 8888
-#define FPGA_CLOCK_SPEED 19200
+// #define FPGA_CLOCK_SPEED 19200
+
+#define CLK_PIN 21      // physical pin 29
+#define CTS_PIN 3      // physical pin 15
+#define CMD_GATE_PIN 23 // physical pin 33
 
 INITIALIZE_EASYLOGGINGPP
 
@@ -153,7 +160,19 @@ void initRecvDataParam(){
     data_stream = new ParallelGPIO();
     data_stream->Init();
     data_stream->resetFPGA();
-    fd = new WiringPiSerial("/dev/serial0", FPGA_CLOCK_SPEED);
+
+    int clk_speed = 0;
+    if(digitalRead(CLK_PIN)){
+        clk_speed =19200;
+        fprintf(stdout, "clk speed: 19200\n");
+    }
+    else{
+        clk_speed = 38400;
+        fprintf(stdout, "clk speed: 38400\n");
+    }
+
+    // clk_speed =19200;
+    fd = new WiringPiSerial("/dev/serial0", clk_speed);
     fd->Init();
     recv_count = 0;
 }
@@ -258,7 +277,7 @@ void storeData(){
     pthread_mutex_lock(&lock_data);
     data_stream->SafeRead(buf_in, BUFFER_SIZE);
     pthread_mutex_unlock(&lock_data);
-    
+
     // for debugging, use the following cond instead
     // if ((verifyCounter()) && (rb_wifi->getFree() > BUFFER_SIZE+1)){
     if (rb_wifi->getFree() > BUFFER_SIZE+1){
@@ -268,32 +287,25 @@ void storeData(){
     }
 }
 
+void initGpioPin(){
+    fprintf(stdout, "Initialize gpio...\n");
+    wiringPiSetup();
+    pinMode (23, OUTPUT) ;
+    pinMode (3, OUTPUT) ;
+    digitalWrite(CMD_GATE_PIN,LOW);
+    delay(100);
+    digitalWrite(CMD_GATE_PIN,LOW);
+    // digitalWrite(CMD_GATE_PIN,HIGH);
+    fprintf(stdout, "Gpio initialised.\n");
+}
+
 // FPGA -> internal buffer
 void *recvData(void *arg){
     initRecvDataParam();
+
     while(1){
         if(read_bool){
-        storeData();
-        }
-    }
-}
-
-// find sync pulse from internal buffer
-void *readPacket(void *arg){
-    // minimal changes from original, logic-wise it wont work
-    // TODO: remove rb-wifi dependant, modify recv() usage for tcp-blocking
-    while(1){
-        if(rb_wifi->getFree() > BUFFER_SIZE+1 && rb_sync->getOccupied() > BUFFER_SIZE+1){
-            rb_sync->read(buf_sync, BUFFER_SIZE);
-
-            if(sync_len <= 0){
-                sync_len = recv(odin_socket, &buf_sync_cmd, 32, MSG_DONTWAIT);
-            }
-            if(sync_len > 0){
-                slotSyncPulse();
-            }
-            // rb_wifi->write(buf_sync, BUFFER_SIZE);
-            memset(buf_sync, '\0', BUFFER_SIZE);
+            storeData();
         }
     }
 }
@@ -320,35 +332,57 @@ void *recvWiFi(void *arg){
     while(1){
         recv_count = recv(client_sock, &buf_cmd, 32, 0);
         if(recv_count > 0){
+            // read_bool = false;
+            digitalWrite(CMD_GATE_PIN,HIGH);
+            usleep(200000);
             pthread_mutex_lock(&lock_data);
             data_stream->setClockTuneMode(false);
             setupCmdSettings();
             sendCmd();
             pthread_mutex_unlock(&lock_data);
+            usleep(200000);
+            digitalWrite(CMD_GATE_PIN,LOW);
         }
     }
 }
 
-int main(int argc, char *argv[]){
-    // commented out useless logging for readablility, all of them should be running fine
-    // if there is any error, the program should terminate, cron log can be used to store that error
-    // wiringPiSetup() no longer returns anything valuable, see http://wiringpi.com/reference/setup/
+int stick_thread_to_core(pthread_t* thread, int core_id) {
+   int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+   if (core_id < 0 || core_id >= num_cores){
+      return EINVAL;
+   }
+   cpu_set_t cpuset;
+   CPU_ZERO(&cpuset);
+   CPU_SET(core_id, &cpuset);
+   return pthread_setaffinity_np(*thread, sizeof(cpu_set_t), &cpuset);
+}
 
-    wiringPiSetup();
+void mainInit(){
+    initGpioPin();
     rb_wifi = new ringbuffer<uint8_t>(BUFFER_SIZE_2 * 1000);    // ~3.2MB, overkill imo
     rb_sync = new ringbuffer<uint8_t>(BUFFER_SIZE * 10);        // ~1.6KB, unused rn
     pthread_mutex_init(&lock_rb_wifi, NULL);
     pthread_mutex_init(&lock_data, NULL);
-    // connectOdin();
-    waitForSylph();
+}
 
-    pthread_create(&(tid[1]), NULL, &sendWiFi, NULL);
+void initAllThreads(){
+    pthread_create(&(tid[0]), NULL, &recvData, NULL);
     pthread_create(&(tid[1]), NULL, &recvWiFi, NULL);
-    pthread_create(&(tid[2]), NULL, &recvData, NULL);
-    
-    for(int i = 0; i < 3; i++){
+    pthread_create(&(tid[2]), NULL, &sendWiFi, NULL);
+
+    stick_thread_to_core(&(tid[0]),1);
+    stick_thread_to_core(&(tid[1]),2);
+    stick_thread_to_core(&(tid[2]),3);
+
+    for(int i = 0; i < 4; i++){
         pthread_join(tid[i], NULL);
     }
+}
 
+int main(int argc, char *argv[]){
+    mainInit();
+    waitForSylph();
+    initAllThreads();
+    
     return 0;
 }
