@@ -47,6 +47,8 @@ WINDOW_CLASS = 0.2  # second
 WINDOW_OVERLAP = 0.05  # second
 SAMPLING_FREQ = 1250  # sample/second
 
+EXTEND_STIM = 0.2  # extend the stimulation for a time (seconds)
+
 HP_THRESH = 100
 LP_THRESH = 0
 NOTCH_THRESH = 50
@@ -144,7 +146,7 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, ROBOT_HAND_OUTPUT, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, ROBOT_HAND_OUTPUT, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, EXTEND_STIM, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 
