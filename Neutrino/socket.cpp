@@ -302,6 +302,7 @@ void *recv_data(void *arg){
         if(is_read_data){
             store_data();
         }
+        data_stream->getBitMode() == BITMODE_8 ? usleep(200) : usleep(20);
     }
 }
 
@@ -353,11 +354,13 @@ void init_main(){
 }
 
 void init_all_threads(){
-    pthread_create(&(thread[0]), NULL, &recv_data, NULL);
+    pthread_t thread_main = pthread_self();
+    pthread_create(&(thread[0]), NULL, &send_wifi, NULL);
     pthread_create(&(thread[1]), NULL, &recv_wifi, NULL);
-    pthread_create(&(thread[2]), NULL, &send_wifi, NULL);
+    pthread_create(&(thread[2]), NULL, &recv_data, NULL);
 
-    stick_thread_to_core(&(thread[0]),1);
+    stick_thread_to_core(&thread_main,2);
+    stick_thread_to_core(&(thread[0]),2);
     stick_thread_to_core(&(thread[1]),2);
     stick_thread_to_core(&(thread[2]),3);
 

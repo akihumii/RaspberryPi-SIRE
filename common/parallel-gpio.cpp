@@ -49,13 +49,9 @@ unsigned char ParallelGPIO::readByte(void){
 	if(mode == BITMODE_5){
 		byte &= 0B00011111;
 	}
-	// usleep(1);
 	digitalWrite(CTS, LOW);
-	// usleep(1);
 	while(digitalRead(DATA_RDY)){};
-	// usleep(1);
 	digitalWrite(CTS, HIGH);
-	// fprintf(fp, "%d\n", byte);
 	return byte;
 }
 
