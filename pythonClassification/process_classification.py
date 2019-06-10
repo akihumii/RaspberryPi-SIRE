@@ -17,7 +17,6 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.clf = None
         self.sampling_freq = sampling_freq
         self.window_class = window_class  # seconds
-        self.window_class_sample_len = int(window_class * self.sampling_freq)
         self.window_overlap = window_overlap  # seconds
         self.ring_event = ring_event
         self.ring_queue = ring_queue
@@ -47,8 +46,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.prediction = 0
 
         self.extend_stim_orig = extend_stim  # extend the stimulation for a time
-        self.extend_stim = extend_stim * np.ones(self.extend_stim_orig)
-        self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
+        # self.extend_stim = extend_stim * np.ones(self.extend_stim_orig)
+        # self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
 
         self.pin_reset_obj = pin_reset_obj
 
@@ -92,7 +91,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xD0: self.update_threshold_power,
             0xD1: self.update_threshold_power,
             0xD2: self.update_threshold_power,
-            0xD3: self.update_threshold_power
+            0xD3: self.update_threshold_power,
+            0xD4: self.update_decoding_window_size,
+            0xD5: self.update_overlap_window_size,
+            0xD6: self.update_sampling_freq,
+            0xDA: self.update_extend_stimulation
         }
 
         self.stim_threshold_upper = 10
@@ -118,7 +121,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('started classification thread...')
         while True:
             self.data = np.append(self.data, self.ring_queue.get(), axis=0)
-            if np.size(self.data, 0) > (self.window_class * self.sampling_freq):
+            if np.size(self.data, 0) > self.window_class_sample_len:
                 self.data = self.data[-self.window_class_sample_len:, :]
                 break
 
@@ -134,7 +137,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if not self.ring_queue.empty():  # loop until ring queue has some thing
                 self.data_temp = np.append(self.data_temp, self.ring_queue.get(), axis=0)
 
-                if np.size(self.data_temp, 0) > (self.window_overlap * self.sampling_freq):
+                if np.size(self.data_temp, 0) > self._get_window_overlap_sample_len():
                     self.data = np.append(self.data, self.data_temp, axis=0)
                     self.data = self.data[-self.window_class_sample_len:, :]
                     self.data_temp = []
@@ -164,8 +167,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         prediction_changed_flag = [(prediction >> i & 1) != (self.prediction >> i & 1) for i in range(self.num_channel)]
 
-        # self.check_extend_stim(prediction)
-        
+        # prediction_changed_flag = self.check_extend_stim(prediction, prediction_changed_flag)
+
         if self.method_io == 'serial':
             if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
                 self.serial_output_4F(prediction, prediction_changed_flag)
@@ -189,7 +192,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 # print(self.odin_obj.amplitude)
                 return command
             else:  # single stimulation
-                if prediction_changed_flag:  # send command when there is a change in prediction
+                if any(prediction_changed_flag):  # send command when there is a change in prediction
                     command = self.change_channel_enable()
                     print(command)
                     # print(self.odin_obj.amplitude)
@@ -206,6 +209,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         for i, x in enumerate(prediction_changed_flag):
             if x:
                 self.output_serial_direct(prediction, i)
+                self.prediction = bitwise_operation.edit_bit(i, (prediction >> i & 1), self.prediction)
                 return True
 
     def serial_output_4F(self, prediction, prediction_changed_flag):
@@ -249,8 +253,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
             self.num_channel = len(self.channel_decode)
             self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
-        self.extend_stim = self.extend_stim_orig * np.ones(self.num_channel)
-        self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
+        # self.extend_stim = self.extend_stim_orig * np.ones(self.num_channel)
+        # self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
         print('loaded classifier...')
         print(filename)
 
@@ -393,6 +397,26 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(data)
         # time.sleep(0.04)
 
+    def update_decoding_window_size(self, data):
+        self.window_class = data[1] / 1000  # gotten in milliseconds
+        print('updated decoding window size...')
+        print(data)
+
+    def update_overlap_window_size(self, data):
+        self.window_overlap = data[1] / 1000  # gotten in milliseconds
+        print('updated overlap window size...')
+        print(data)
+
+    def update_sampling_freq(self, data):
+        self.sampling_freq = data[1]
+        print('updated sampling frequency...')
+        print(data)
+
+    def update_extend_stimulation(self, data):
+        self.extend_stim_orig = data[1]
+        print('updated sampling frequency...')
+        print(data)
+
     def change_channel_enable(self):
         self.odin_obj.channel_enable = self.prediction
         command = self.odin_obj.send_channel_enable()
@@ -400,12 +424,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(command)
         return command
 
-    def check_extend_stim(self, prediction):
-        for i in range(self.num_channel):
-            if not self.extend_stim_flag[i]:
+    def check_extend_stim(self, prediction, prediction_changed_flag):
+        for i, x in enumerate(prediction_changed_flag):
+            if x and (prediction >> i & 1):
                 self.extend_stim_flag[i] = True
-            elif self.extend_stim_flag[i] and self.extend_stim[i] > 0:
-                self.extend_stim[i] -=
+                self.extend_stim[i] = self.extend_stim_orig
+                continue
+            if self.extend_stim_flag[i]:
+                if self.extend_stim[i] > 0:
+                    prediction_changed_flag[i] = False
+                    self.extend_stim -= self._get_window_overlap_sample_len()
+                else:
+                    self.extend_stim_flag[i] = False
+                    self.extend_stim[i] = self.extend_stim_orig
+
+        return prediction_changed_flag
 
     def check_closed_loop(self):
         if not self.flag_closed_loop and not self.pin_closed_loop_obj.input_GPIO():
@@ -489,6 +522,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             print('resume saving with a new file...')
             time.sleep(0.1)
 
+    def _get_window_class_sample_len(self):
+        return int(self.window_class * self.sampling_freq)
 
+    def _get_window_overlap_sample_len(self):
+        return int(self.window_overlap * self.sampling_freq)
 
 

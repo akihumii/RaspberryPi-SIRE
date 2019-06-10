@@ -67,6 +67,11 @@ class DataHandler(Saving, Filtering):
         self.loc_start = []
         self.loc_start_orig = []
 
+        self.sampling_freq = sampling_freq
+        self.hp_thresh = hp_thresh
+        self.lp_thresh = lp_thresh
+        self.notch_thresh = notch_thresh
+
         self.__flag_start_bit = 165
         self.__flag_end_bit = 90
         self.__flag_sync_pulse = [0, 255]
@@ -76,7 +81,7 @@ class DataHandler(Saving, Filtering):
         self.__counter_len = 1
         self.__ring_column_len = self.__channel_len + self.__sync_pulse_len + self.__counter_len
 
-        self.filter_obj = [Filtering(sampling_freq, hp_thresh, lp_thresh, notch_thresh) for __ in range(self.__channel_len)]
+        self.set_filter_obj()
 
     def get_buffer(self, buffer_read):
         [buffer_leftover, empty_buffer_flag, self.loc_start_orig, self.loc_start, self.buffer_process] = get_buffer_func(buffer_read, self.__flag_start_bit, self.__sample_len, self.__flag_end_bit, self.__flag_sync_pulse, self.__counter_len, self.buffer_process)
@@ -95,6 +100,28 @@ class DataHandler(Saving, Filtering):
             print("buffer full...")
         else:
             ring_queue.put_nowait(self.data_processed)
+
+    def set_filter_obj(self):
+        self.filter_obj = [Filtering(self.sampling_freq, self.hp_thresh, self.lp_thresh, self.notch_thresh) for __ in range(self.__channel_len)]
+
+    def update_filter_obj(self, data):
+        address = {
+            0xD7: self.update_hp_thresh,  # highpass cutoff freq
+            0xD8: self.update_lp_thresh,  # lowpass cutoff freq
+            0xD9: self.update_notch_thresh  # notch cutoff freq
+        }
+        address.get(data[0])(data[1])
+        self.set_filter_obj()
+
+    def update_hp_thresh(self, data):
+        self.hp_thresh = data
+
+    def update_lp_thresh(self, data):
+        self.lp_thresh = data
+
+    def update_notch_thresh(self, data):
+        self.notch_thresh = data
+
 
 
 
