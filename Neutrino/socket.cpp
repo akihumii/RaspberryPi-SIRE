@@ -302,7 +302,6 @@ void *recv_data(void *arg){
         if(is_read_data){
             store_data();
         }
-        data_stream->getBitMode() == BITMODE_8 ? usleep(200) : usleep(20);
     }
 }
 
