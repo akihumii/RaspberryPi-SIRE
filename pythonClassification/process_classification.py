@@ -441,7 +441,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         if not self.flag_reset and self.pin_reset_obj.input_GPIO():  # reload parameters
             self.flag_reset = True
             # self.thresholds = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
-            self.odin_obj.get_coefficients()
+            # self.odin_obj.get_coefficients()
             self.odin_obj.send_parameters()
             time.sleep(0.04)
             self.change_channel_enable()
