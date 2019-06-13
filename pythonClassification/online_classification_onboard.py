@@ -132,7 +132,7 @@ if __name__ == "__main__":
             tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, BUFFER_SIZE_SENDING)  # create odin socket object
             tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, BUFFER_SIZE_SENDING)  # create gui socket object
 
-            thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, filter_parameters_queue, change_parameter_event, stop_event)  # send data to GUI in another thread
+            thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, filter_parameters_queue, stop_event)  # send data to GUI in another thread
             thread_bypass_data.start()  # start thread to bypass data to GUI
 
             odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
@@ -162,7 +162,8 @@ if __name__ == "__main__":
 
                 if not empty_buffer_flag:
                     if not filter_parameters_queue.empty():
-                        data_obj.update_filter_obj()
+                        data_obj.update_filter_obj(filter_parameters_queue.get())
+                        print('updated filter...')
                     data_obj.get_data_channel()  # demultiplex and get the channel data
                     data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
                     # saving_obj.save(data_obj.data_raw, "a")

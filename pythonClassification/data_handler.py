@@ -106,6 +106,7 @@ class DataHandler(Saving, Filtering):
 
     def update_filter_obj(self, data):
         address = {
+            0xD6: self.update_sampling_freq,
             0xD7: self.update_hp_thresh,  # highpass cutoff freq
             0xD8: self.update_lp_thresh,  # lowpass cutoff freq
             0xD9: self.update_notch_thresh  # notch cutoff freq
@@ -113,13 +114,24 @@ class DataHandler(Saving, Filtering):
         address.get(data[0])(data[1])
         self.set_filter_obj()
 
+    def update_sampling_freq(self, data):
+        print('updated sampling frequency for filtering...')
+        print(data)
+        self.sampling_freq = data
+
     def update_hp_thresh(self, data):
+        print('updated highpass cutoff frequency...')
+        print(data)
         self.hp_thresh = data
 
     def update_lp_thresh(self, data):
+        print('updated lowpass cutoff frequency...')
+        print(data)
         self.lp_thresh = data
 
     def update_notch_thresh(self, data):
+        print('updated notch frequency...')
+        print(data)
         self.notch_thresh = data
 
 
