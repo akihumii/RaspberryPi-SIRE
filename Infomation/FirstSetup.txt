@@ -25,8 +25,11 @@ If the wireless kernel module has been recognised (it should not say "unclaimed"
 https://www.raspberrypi.org/documentation/configuration/wireless/wireless-cli.md
 
 sudo su
+wpa_passphrase "YESSAH" "password" >> /etc/wpa_supplicant/wpa_supplicant.conf
 wpa_passphrase "ShihChiangDesktop" "liushihchiang" >> /etc/wpa_supplicant/wpa_supplicant.conf
+wpa_passphrase "Odin AP" "password" >> /etc/wpa_supplicant/wpa_supplicant.conf
 wpa_passphrase "NUS_2-4GHz" "password" >> /etc/wpa_supplicant/wpa_supplicant.conf
+
 
 sudo apt-get update
 sudo apt-get dist-upgrade
@@ -101,3 +104,51 @@ The steps below shows how to disable on-board Bluetooth and related services. Th
 Even after disabling on-board Bluetooth and related services, Bluetooth will be available when a Bluetooth adapter is plugged in.
 
 Note: change the arm_freq to 1400, arm_freq_min=100, and temp_soft_limit=70 in /boot/config.txt
+
+Create folders on home directory:
+mkdir Data
+mkdir Python
+mkdir SylphX
+mkdir classificationTmp
+Copy all the files from 'common', 'Neutrino', 'SylphX' directories. Pick the desired Makefile and socket.cpp from either 'Neutrino' or 'SylphX'.
+Change the directories accordingly in the Makefile and socket.cpp
+
+For etc running sylphx at the startup
+Automatic launch program: Create a file in /lib/systemd/system/[program-name].service
+	[Unit]
+	Description=[program-name] startup
+	After=multi-user.target
+	
+	[Service]
+	ExecStart=/home/pi/[program-destination]
+	
+	[Install]
+	WantedBy=multi-user.target
+Type the following command to activate the service
+
+	sudo systemctl daemon-reload
+	sudo systemctl enable [program-name].service
+	sudo systemctl start [program-name].service
+	sudo reboot
+
+Install Berryconda:
+https://github.com/jjhelmus/berryconda
+**Note** needs to reboot or do
+source .bashrc
+to change the default python directory
+
+Install Python packages
+conda install -c anaconda numpy
+conda install -c poppy-project rpi.gpio 
+conda install -c anaconda scipy 
+conda install -c numba numba
+conda install -c anaconda pyserial 
+conda install -c anaconda scikit-learn 
+
+Autologin to Rpi:
+Create 'authorized_keys' file in raspberryPi /.ssh/ directory:
+Paste your public key of your remote machine.
+To generate public key and setup for passwordless login, on the remote machine side, please refer to:
+https://www.ssh.com/ssh/putty/windows/puttygen
+Paste the public key in '/.ssh/authorized_keys' file. Add the word 'ssh-rsa ' in front of your public key. 
+Make sure that all the words in your public key are in one sentence.
