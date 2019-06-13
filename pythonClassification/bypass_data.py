@@ -13,6 +13,7 @@ class BypassData(multiprocessing.Process):
         self.change_parameter_queue = change_parameter_queue
         self.change_parameter_event = change_parameter_event
         self.stop_event = stop_event
+        self.classification_param_byte_len = 3
 
         self.address = {
             0xD6: True,  # sampling freq
@@ -34,7 +35,9 @@ class BypassData(multiprocessing.Process):
                 self.raw_buffer_event.set()  # to insert data into raw_buffer_queue
                 client_socket_obj = copy.deepcopy(self.tcp_ip_obj)
                 client_socket_obj.socket_obj = client_socket
+                client_socket_obj.buffer_size = self.classification_param_byte_len
                 client_socket_obj.socket_obj.setblocking(False)
+
                 print('accepted client...')
 
                 broken_status = 0
@@ -46,14 +49,16 @@ class BypassData(multiprocessing.Process):
                     # print('reading from client socket...')
                     data_recv = client_socket_obj.read([])[0]
                     if len(data_recv) > 0:
-                        if len(data_recv) == 1:
+                        if len(data_recv) == 1:  # stimulator parameters
                             data_recv = np.append(data_recv, 0)
-                        elif len(data_recv) > 2:
-                            data_recv = [data_recv[0], self._char2int(data_recv[1:])]
-                        if self.address.get(data_recv[0]):
+                        elif len(data_recv) > 2:  # classification parameters
+                            data_recv = np.array([data_recv[0], self._char2int(data_recv[1:])])
+
+                        if self.address.get(data_recv[0]):  # if the address belongs to filtering parameters or sampling frequency
                             self.filter_parameters_queue.put(data_recv.astype(int))  # put for changing filter object
                         else:
                             self.change_parameter_queue.put(data_recv.astype(int))  # put for changing classification parameters
+
                         if data_recv[0] == self.address_sampling_frequency:  # put sampling frequency to classification obj as well
                             self.change_parameter_queue.put(data_recv.astype(int))
                         self.change_parameter_event.set()  # flag to notify there's a change of parameters is needed
