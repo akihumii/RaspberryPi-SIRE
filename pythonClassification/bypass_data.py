@@ -24,6 +24,15 @@ class BypassData(multiprocessing.Process):
 
         self.address_sampling_frequency = 0xD6
 
+        self.address = {
+            0xD6: True,  # sampling freq
+            0xD7: True,  # highpass cutoff freq
+            0xD8: True,  # lowpass cutoff freq
+            0xD9: True  # notch cutoff freq
+        }
+
+        self.address_sampling_frequency = 0xD6
+
     def run(self):
         print('started bypassing thread...')
         count = 1

@@ -17,7 +17,6 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.clf = None
         self.sampling_freq = sampling_freq
         self.window_class = window_class  # seconds
-        self.window_class_sample_len = int(window_class * self.sampling_freq)
         self.window_overlap = window_overlap  # seconds
         self.ring_event = ring_event
         self.ring_queue = ring_queue
@@ -38,6 +37,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.data = []
         self.data_temp = []
+        self.size_temp = 0
         self.channel_decode = []
         self.channel_decode_default = np.array([4, 5, 6, 7])
         self.num_channel = len(self.channel_decode_default)
@@ -47,7 +47,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.prediction = 0
 
         self.extend_stim_orig = extend_stim  # extend the stimulation for a time
-        self.extend_stim = extend_stim * np.ones(self.extend_stim_orig)
+        self.extend_stim = []
         self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
 
         self.pin_reset_obj = pin_reset_obj
@@ -121,10 +121,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         print('started classification thread...')
         while True:
-            self.data = np.append(self.data, self.ring_queue.get(), axis=0)
-            if np.size(self.data, 0) > (self.window_class * self.sampling_freq):
-                self.data = self.data[-self.window_class_sample_len:, :]
+            if not self.ring_queue.empty():
+                self.data = self.ring_queue.get()
                 break
+
+        while True:
+            if not self.ring_queue.empty():
+                if np.size(self.data, 0) > self._get_window_class_sample_len():
+                    self.data = self.data[-self._get_window_class_sample_len():, :]
+                    break
+                self.data = np.append(self.data, self.ring_queue.get(), axis=0)
 
         while True:
             self.check_saving_flag()
@@ -136,11 +142,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
             # start classifying when data in ring queue has enough data
             if not self.ring_queue.empty():  # loop until ring queue has some thing
-                self.data_temp = np.append(self.data_temp, self.ring_queue.get(), axis=0)
+                if self.data_temp:
+                    self.data_temp = np.append(self.data_temp, self.ring_queue.get(), axis=0)
+                else:
+                    self.data_temp = self.ring_queue.get()
 
-                if np.size(self.data_temp, 0) > (self.window_overlap * self.sampling_freq):
+                self.size_temp = np.size(self.data_temp, 0)
+                if self.size_temp > self._get_window_overlap_sample_len():
                     self.data = np.append(self.data, self.data_temp, axis=0)
-                    self.data = self.data[-self.window_class_sample_len:, :]
+                    self.data = self.data[self.size_temp:, :]  # pop out the a portion from self.data which has the size same as the data_temp
                     self.data_temp = []
                     # print(self.data[-1, 11])  # print counter
                     # self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
@@ -157,7 +167,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('classify thread has stopped...')
 
     def classify(self):
-        ## Check prediction change flag
+        # Check prediction change flag
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
             prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
         else:
@@ -168,8 +178,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         prediction_changed_flag = [(prediction >> i & 1) != (self.prediction >> i & 1) for i in range(self.num_channel)]
 
-        # self.check_extend_stim(prediction)
-        
+        # prediction_changed_flag = self.check_extend_stim(prediction, prediction_changed_flag)
+
         if self.method_io == 'serial':
             if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
                 self.serial_output_4F(prediction, prediction_changed_flag)
@@ -193,7 +203,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 # print(self.odin_obj.amplitude)
                 return command
             else:  # single stimulation
-                if prediction_changed_flag:  # send command when there is a change in prediction
+                if any(prediction_changed_flag):  # send command when there is a change in prediction
                     command = self.change_channel_enable()
                     print(command)
                     # print(self.odin_obj.amplitude)
@@ -210,6 +220,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         for i, x in enumerate(prediction_changed_flag):
             if x:
                 self.output_serial_direct(prediction, i)
+                self.prediction = bitwise_operation.edit_bit(i, (prediction >> i & 1), self.prediction)
                 return True
 
     def serial_output_4F(self, prediction, prediction_changed_flag):
@@ -219,7 +230,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             return True
 
     def save_file(self, command_temp):
-        command_array = np.zeros([np.size(self.data, 0), 13])  # create an empty command array
+        command_array = np.zeros([self.size_temp, 13])  # create an empty command array
         command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
         if self.start_stimulation_initial:
             command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
@@ -240,7 +251,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
-        self.saving_file.save(np.hstack([self.data, command_array]), "a")  # save the counter and the command
+        self.saving_file.save(np.hstack([self.data[-self.size_temp:, :], command_array]), "a")  # save the counter and the command
 
     def load_classifier(self):
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
@@ -413,8 +424,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(data)
 
     def update_extend_stimulation(self, data):
-        self.extend_stim_orig = data[1]
-        print('updated sampling frequency...')
+        self.extend_stim_orig = data[1] / 1000
+        print('updated extend stimulation...')
         print(data)
 
     def change_channel_enable(self):
@@ -434,6 +445,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 if self.extend_stim[i] > 0:
                     prediction_changed_flag[i] = False
                     self.extend_stim -= self._get_window_overlap_sample_len()
+                    print('masked channel %d' % i)
                 else:
                     self.extend_stim_flag[i] = False
                     self.extend_stim[i] = self.extend_stim_orig

@@ -163,7 +163,6 @@ if __name__ == "__main__":
                 if not empty_buffer_flag:
                     if not filter_parameters_queue.empty():
                         data_obj.update_filter_obj(filter_parameters_queue.get())
-                        print('updated filter...')
                     data_obj.get_data_channel()  # demultiplex and get the channel data
                     data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
                     # saving_obj.save(data_obj.data_raw, "a")
