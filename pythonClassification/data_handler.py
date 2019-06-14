@@ -112,7 +112,10 @@ class DataHandler(Saving, Filtering):
             0xD9: self.update_notch_thresh  # notch cutoff freq
         }
         address.get(data[0])(data[1])
-        self.set_filter_obj()
+        [self.filter_obj[i].set_filter_parameters(self.sampling_freq, self.hp_thresh, self.lp_thresh) for i in range(self.__channel_len)]
+        [self.filter_obj[i].set_filter_coeff() for i in range(self.__channel_len)]
+
+        print('updated filter...')
 
     def update_sampling_freq(self, data):
         print('updated sampling frequency for filtering...')

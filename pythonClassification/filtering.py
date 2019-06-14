@@ -29,16 +29,22 @@ class Filtering:
         self.z_low_pass = None
         self.__num_taps = 150
         self.__order = 5
-        self.nyq = 0.5 * self.sampling_freq
-        self.high_pass_threshold = hp_thresh / self.nyq
-        self.low_pass_threshold = lp_thresh / self.nyq
+        self.nyq = 0
+        self.high_pass_threshold = 0
+        self.low_pass_threshold = 0
 
+        self.set_filter_parameters(sampling_freq, hp_thresh, lp_thresh)
         self.set_filter()
 
     def set_filter(self):
-        # self.filter_obj = signal.firwin(self.__num_taps,
-        #                                 [self.low_pass_threshold, self.high_pass_threshold], pass_zero=False)
+        # self.filter_obj = signal.firwin(self.__num_taps,[self.low_pass_threshold, self.high_pass_threshold], pass_zero=False)
+        self.set_filter_coeff()
 
+        if self.filter_flag:
+            self.filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
+
+    def set_filter_coeff(self):
+        self.filter_flag = True
         if self.high_pass_threshold > 0 and self.low_pass_threshold > 0:
             filter_thresholds = [self.high_pass_threshold, self.low_pass_threshold]
             filter_type = 'band'
@@ -55,7 +61,11 @@ class Filtering:
             [self.filter_b, self.filter_a] = signal.butter(
                 self.__order, filter_thresholds, filter_type)
 
-            self.filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
+    def set_filter_parameters(self, sampling_freq, hp_thresh, lp_thresh):
+        self.sampling_freq = sampling_freq
+        self.nyq = 0.5 * self.sampling_freq
+        self.high_pass_threshold = hp_thresh / self.nyq
+        self.low_pass_threshold = lp_thresh / self.nyq
 
     def filter(self, data_buffer_all):
         # self.data_filtered = [[] for __ in range(len(data_buffer_all))]
