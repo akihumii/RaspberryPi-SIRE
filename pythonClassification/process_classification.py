@@ -37,6 +37,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.data = []
         self.data_temp = []
+        self.size_temp = 0
         self.channel_decode = []
         self.channel_decode_default = np.array([4, 5, 6, 7])
         self.num_channel = len(self.channel_decode_default)
@@ -146,9 +147,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 else:
                     self.data_temp = self.ring_queue.get()
 
-                if np.size(self.data_temp, 0) > self._get_window_overlap_sample_len():
+                self.size_temp = np.size(self.data_temp, 0)
+                if self.size_temp > self._get_window_overlap_sample_len():
                     self.data = np.append(self.data, self.data_temp, axis=0)
-                    # self.data = self.data[-self._get_window_class_sample_len():, :]
+                    self.data = self.data[self.size_temp:, :]  # pop out the a portion from self.data which has the size same as the data_temp
                     self.data_temp = []
                     # print(self.data[-1, 11])  # print counter
                     # self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
@@ -228,7 +230,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             return True
 
     def save_file(self, command_temp):
-        command_array = np.zeros([np.size(self.data, 0), 13])  # create an empty command array
+        command_array = np.zeros([self.size_temp, 13])  # create an empty command array
         command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
         if self.start_stimulation_initial:
             command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
@@ -249,7 +251,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
-        self.saving_file.save(np.hstack([self.data, command_array]), "a")  # save the counter and the command
+        self.saving_file.save(np.hstack([self.data[-self.size_temp:, :], command_array]), "a")  # save the counter and the command
 
     def load_classifier(self):
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
