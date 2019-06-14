@@ -142,7 +142,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
             # start classifying when data in ring queue has enough data
             if not self.ring_queue.empty():  # loop until ring queue has some thing
-                if self.data_temp:
+                if any(self.data_temp):
                     self.data_temp = np.append(self.data_temp, self.ring_queue.get(), axis=0)
                 else:
                     self.data_temp = self.ring_queue.get()
@@ -178,7 +178,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         prediction_changed_flag = [(prediction >> i & 1) != (self.prediction >> i & 1) for i in range(self.num_channel)]
 
-        # prediction_changed_flag = self.check_extend_stim(prediction, prediction_changed_flag)
+        prediction_changed_flag = self.check_extend_stim(prediction, prediction_changed_flag)
 
         if self.method_io == 'serial':
             if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
@@ -409,12 +409,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         # time.sleep(0.04)
 
     def update_decoding_window_size(self, data):
-        self.window_class = data[1] / 1000  # gotten in milliseconds
+        self.window_class = data[1] / 1000.  # gotten in milliseconds
         print('updated decoding window size...')
         print(data)
 
     def update_overlap_window_size(self, data):
-        self.window_overlap = data[1] / 1000  # gotten in milliseconds
+        self.window_overlap = data[1] / 1000.  # gotten in milliseconds
         print('updated overlap window size...')
         print(data)
 
@@ -424,7 +424,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(data)
 
     def update_extend_stimulation(self, data):
-        self.extend_stim_orig = data[1] / 1000
+        self.extend_stim_orig = data[1] / 1000.
         print('updated extend stimulation...')
         print(data)
 
@@ -437,15 +437,14 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def check_extend_stim(self, prediction, prediction_changed_flag):
         for i, x in enumerate(prediction_changed_flag):
-            if x and (prediction >> i & 1):
+            if prediction >> i & 1:
                 self.extend_stim_flag[i] = True
                 self.extend_stim[i] = self.extend_stim_orig
-                continue
-            if self.extend_stim_flag[i]:
+            elif x and not (prediction >> i & 1) and self.extend_stim_flag[i]:
                 if self.extend_stim[i] > 0:
                     prediction_changed_flag[i] = False
-                    self.extend_stim -= self._get_window_overlap_sample_len()
-                    print('masked channel %d' % i)
+                    self.extend_stim[i] -= self.window_overlap
+                    print('masked channel %d, remaining waiting time: %.3f' % (i+1, self.extend_stim[i]))
                 else:
                     self.extend_stim_flag[i] = False
                     self.extend_stim[i] = self.extend_stim_orig
