@@ -37,6 +37,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.data = []
         self.data_temp = []
+        self.size_temp = 0
         self.channel_decode = []
         self.channel_decode_default = np.array([4, 5, 6, 7])
         self.num_channel = len(self.channel_decode_default)
@@ -44,6 +45,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.odin_obj = odin_obj
         self.prediction = 0
+        self.prediction_changed_flag = []
+
+        self.extend_stim_orig = extend_stim  # extend the stimulation for a time
+        self.extend_stim = []
+        self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
 
         self.pin_reset_obj = pin_reset_obj
 
@@ -116,6 +122,18 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         print('started classification thread...')
         while True:
+            if not self.ring_queue.empty():
+                self.data = self.ring_queue.get()
+                break
+
+        while True:
+            if not self.ring_queue.empty():
+                if np.size(self.data, 0) > self._get_window_class_sample_len():
+                    self.data = self.data[-self._get_window_class_sample_len():, :]
+                    break
+                self.data = np.append(self.data, self.ring_queue.get(), axis=0)
+
+        while True:
             self.check_saving_flag()
             self.check_stimulation_flag()
             self.check_reset_flag()
@@ -124,17 +142,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.check_closed_loop()
 
             # start classifying when data in ring queue has enough data
-            if not self.start_classify_flag:
-                self.start_classify_flag = np.size(self.data, 0) > (self.window_overlap * self.sampling_freq)
+            if not self.ring_queue.empty():  # loop until ring queue has some thing
+                if len(self.data_temp) > 0:
+                    self.data_temp = np.append(self.data_temp, self.ring_queue.get(), axis=0)
+                else:
+                    self.data_temp = self.ring_queue.get()
 
-            while not self.ring_queue.empty():  # loop until ring queue has some thing
-                self.data = self.ring_queue.get()
-                # print(self.data[-1, 11])  # print counter
-                # self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
+                self.size_temp = np.size(self.data_temp, 0)
+                if self.size_temp > self._get_window_overlap_sample_len():
+                    self.data = np.append(self.data, self.data_temp, axis=0)
+                    self.data = self.data[self.size_temp:, :]  # pop out the a portion from self.data which has the size same as the data_temp
+                    self.data_temp = []
+                    # print(self.data[-1, 11])  # print counter
+                    # self.saving_file_all.save(self.data, "a")  # save filtered data in Rpi
 
-                # print('start classifying...')
-                command_temp = 0
-                if self.start_classify_flag:
+                    # print('start classifying...')
                     command_temp = self.classify()  # do the prediction and the display it
 
                     if not self.flag_save_new:
@@ -146,41 +168,33 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('classify thread has stopped...')
 
     def classify(self):
-        prediction_changed_flag = False
+        # Check prediction change flag
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
-            # try:
             prediction = self.classify_function('all', self.data[:, self.channel_decode_default-1])  # pass in the channel index and data
-            if self.method_io == 'serial':
-                if prediction != self.prediction:
-                    self.output_serial_direct(prediction)
-                    self.prediction = prediction
-                    prediction_changed_flag = True
-            else:
-                for i in range(self.odin_obj.num_channel):
-                    if (prediction >> i & 1) != (self.prediction >> i & 1):  # if prediction changes
-                        self.prediction = self.output(i, prediction >> i & 1, self.prediction)  # function of classification_decision
-                        prediction_changed_flag = True
-
-            # except ValueError:
-            #     print('prediction failed...')
         else:
-            if self.method_io == 'serial':
+            prediction = 0
+            for i, x in enumerate(self.channel_decode):
+                prediction_temp = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
+                prediction = bitwise_operation.edit_bit(i, prediction_temp, prediction)
+
+        self.prediction_changed_flag = [(prediction >> i & 1) != (self.prediction >> i & 1) for i in range(self.num_channel)]
+
+        self.check_extend_stim(prediction)
+
+        if self.method_io == 'serial':
+            if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
+                self.serial_output_4F(prediction)
+            else:
                 output_dic = {
                     'PSS': self.serial_output_PSS,
                     '4F': self.serial_output_4F,
                     'combo': self.serial_output_4F
                 }
-                prediction_changed_flag = output_dic.get(self.robot_hand_output)()
-            else:
-                for i, x in enumerate(self.channel_decode):
-                    try:
-                        prediction = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-                        if prediction != (self.prediction >> i & 1):  # if prediction changes
-                            self.prediction = self.output(i, prediction, self.prediction)  # function of classification_decision
-                            prediction_changed_flag = True
-
-                    except ValueError:
-                        print('prediction failed...')
+                output_dic.get(self.robot_hand_output)(prediction)
+        else:
+            for i, x in enumerate(self.prediction_changed_flag):
+                if x:  # if prediction changes
+                    self.prediction = self.output(i, prediction >> i & 1, self.prediction)  # function of classification_decision
 
         if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
             if self.flag_closed_loop:  # closed-loop stimulation
@@ -190,7 +204,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 # print(self.odin_obj.amplitude)
                 return command
             else:  # single stimulation
-                if prediction_changed_flag:  # send command when there is a change in prediction
+                if self.prediction_changed_flag is not None and any(self.prediction_changed_flag):  # send command when there is a change in prediction
                     command = self.change_channel_enable()
                     print(command)
                     # print(self.odin_obj.amplitude)
@@ -198,20 +212,40 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 else:
                     return [0, 0]
         else:
-            if prediction_changed_flag:  # send command when there is a change in prediction
+            if self.prediction_changed_flag is not None and any(self.prediction_changed_flag):  # send command when there is a change in prediction
+                print('prediction_change_flag:')
+                print(self.prediction_changed_flag)
                 print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
             else:
                 return [0, 0]
 
+    def serial_output_PSS(self, prediction):
+        for i, x in enumerate(self.prediction_changed_flag):
+            if x:
+                self.output_serial_direct(prediction, i)
+                self.prediction = bitwise_operation.edit_bit(i, (prediction >> i & 1), self.prediction)
+                return np.ones(np.size(self.prediction_changed_flag), dtype=bool)
+
+    def serial_output_4F(self, prediction):
+        for i, x in enumerate(self.prediction_changed_flag):
+            if x:  # if prediction changes
+                self.prediction = bitwise_operation.edit_bit(i, prediction >> i & 1, self.prediction)  # function of classification_decision
+
     def save_file(self, command_temp):
-        command_array = np.zeros([np.size(self.data, 0), 13])  # create an empty command array
-        command_array[0, 0:2] = command_temp  # replace the first row & second and third column with [address, value]
+        command_array = np.zeros([self.size_temp, 12])  # create an empty command array
+
+        if command_temp is not None:
+            command_array[0, 1] = command_temp[1]  # replace the first row & second and third column with [address, value]
         if self.start_stimulation_initial:
             command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
             self.start_stimulation_initial = False
         elif self.stop_stimulation_initial:
             command_array[1, 0] = self.stop_stimulation_address  # replace the second row first column with starting address
             self.stop_stimulation_initial = False
+
+        # if any(self.prediction_changed_flag):
+        command_array[:, 0] = self.prediction
+        command_array[:, 11] = self.odin_obj.frequency
 
         if self.start_stimulation_flag:
             command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
@@ -220,41 +254,24 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         command_array[:, 3:7] = self.odin_obj.amplitude
         command_array[:, 7:11] = self.odin_obj.pulse_duration
-        command_array[:, 11] = self.odin_obj.frequency
-        command_array[:, 12] = self.odin_obj.step_size
 
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
-        self.saving_file.save(np.hstack([self.data, command_array]), "a")  # save the counter and the command
-
-    def serial_output_PSS(self):
-        for i, x in enumerate(self.channel_decode):
-            prediction_temp = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-            if prediction_temp != (self.prediction >> i & 1):
-                self.prediction = bitwise_operation.edit_bit(i, prediction_temp, self.prediction)
-                self.output_serial_direct(self.prediction, i)
-                # self.prediction = prediction
-                return True
-
-    def serial_output_4F(self):
-        prediction = 0
-        for i, x in enumerate(self.channel_decode):
-            prediction_temp = self.classify_function(i, self.data[:, int(x) - 1])  # pass in the channel index and data
-            prediction = bitwise_operation.edit_bit(i, prediction_temp, prediction)
-        if prediction != self.prediction:  # if prediction changes
-            self.output_serial_direct(prediction, 0)
-            self.prediction = prediction
-            return True
+        self.saving_file.save(np.hstack([self.data[-self.size_temp:, :], command_array]), "a")  # save the counter and the command
 
     def load_classifier(self):
         if self.pin_sm_channel_obj.input_GPIO():  # multi-channel classification
             filename = sorted(x for x in os.listdir('classificationTmp') if x.endswith('Cha.sav'))
             # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
+            self.num_channel = self.odin_obj.num_channel
             self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
         else:  # single-channel classification
             filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
             self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
+            self.num_channel = len(self.channel_decode)
             self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
+        self.extend_stim = self.extend_stim_orig * np.ones(self.num_channel)
+        self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
         print('loaded classifier...')
         print(filename)
 
@@ -398,12 +415,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         # time.sleep(0.04)
 
     def update_decoding_window_size(self, data):
-        self.window_class = data[1] / 1000  # gotten in milliseconds
+        self.window_class = data[1] / 1000.  # gotten in milliseconds
         print('updated decoding window size...')
         print(data)
 
     def update_overlap_window_size(self, data):
-        self.window_overlap = data[1] / 1000  # gotten in milliseconds
+        self.window_overlap = data[1] / 1000.  # gotten in milliseconds
         print('updated overlap window size...')
         print(data)
 
@@ -413,8 +430,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(data)
 
     def update_extend_stimulation(self, data):
-        self.extend_stim_orig = data[1]
-        print('updated sampling frequency...')
+        self.extend_stim_orig = data[1] / 1000.
+        print('updated extend stimulation...')
         print(data)
 
     def change_channel_enable(self):
@@ -424,21 +441,19 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(command)
         return command
 
-    def check_extend_stim(self, prediction, prediction_changed_flag):
-        for i, x in enumerate(prediction_changed_flag):
-            if x and (prediction >> i & 1):
+    def check_extend_stim(self, prediction):
+        for i, x in enumerate(self.prediction_changed_flag):
+            if prediction >> i & 1:
                 self.extend_stim_flag[i] = True
                 self.extend_stim[i] = self.extend_stim_orig
-                continue
-            if self.extend_stim_flag[i]:
+            elif x and not (prediction >> i & 1) and self.extend_stim_flag[i]:
                 if self.extend_stim[i] > 0:
-                    prediction_changed_flag[i] = False
-                    self.extend_stim -= self._get_window_overlap_sample_len()
+                    self.prediction_changed_flag[i] = False
+                    self.extend_stim[i] -= float(self.size_temp) / self.sampling_freq
+                    print('masked channel %d, remaining waiting time: %.3f' % (i+1, self.extend_stim[i]))
                 else:
                     self.extend_stim_flag[i] = False
                     self.extend_stim[i] = self.extend_stim_orig
-
-        return prediction_changed_flag
 
     def check_closed_loop(self):
         if not self.flag_closed_loop and not self.pin_closed_loop_obj.input_GPIO():
@@ -455,13 +470,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             time.sleep(0.1)
 
     def check_change_parameter(self):
-        if self.change_parameter_event.is_set():
-            while not self.change_parameter_queue.empty():
+        # if self.change_parameter_event.is_set():
+            if not self.change_parameter_queue.empty():
                 try:
                     data_parameter = self.change_parameter_queue.get()
                     # print(data_parameter)
                     self.address.get(data_parameter[0])(data_parameter)
-                    self.change_parameter_event.clear()
+                    # self.change_parameter_event.clear()
                 except TypeError:
                     print('failed to update the command:')
                     print(data_parameter)
