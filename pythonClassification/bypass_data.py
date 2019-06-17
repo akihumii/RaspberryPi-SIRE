@@ -22,13 +22,12 @@ class BypassData(multiprocessing.Process):
             0xD9: True  # notch cutoff freq
         }
 
-        self.address_sampling_frequency = 0xD6
-
-        self.address = {
+        self.address_2bytes = {
             0xD6: True,  # sampling freq
             0xD7: True,  # highpass cutoff freq
             0xD8: True,  # lowpass cutoff freq
-            0xD9: True  # notch cutoff freq
+            0xD9: True,  # notch cutoff freq
+            0xDA: True
         }
 
         self.address_sampling_frequency = 0xD6
@@ -60,17 +59,19 @@ class BypassData(multiprocessing.Process):
                     if len(data_recv) > 0:
                         if len(data_recv) == 1:  # stimulator parameters
                             data_recv = np.append(data_recv, 0)
-                        elif len(data_recv) > 2:  # classification parameters
-                            data_recv = np.array([data_recv[0], self._char2int(data_recv[1:])])
 
-                        if self.address.get(data_recv[0]):  # if the address belongs to filtering parameters or sampling frequency
+                        if self.address_2bytes.get(data_recv[0]):  # 2 bytes value
+                            if len(data_recv) > 2:
+                                data_recv = np.array([data_recv[0], self._char2int(data_recv[1:])])
+
+                        if self.address.get(data_recv[0]):  # filtering parameters or sampling frequency
                             self.filter_parameters_queue.put(data_recv.astype(int))  # put for changing filter object
                         else:
-                            self.change_parameter_queue.put(data_recv.astype(int))  # put for changing classification parameters
+                            self.change_parameter_queue.put(data_recv[:2].astype(int))  # put for changing classification parameters
 
                         if data_recv[0] == self.address_sampling_frequency:  # put sampling frequency to classification obj as well
                             self.change_parameter_queue.put(data_recv.astype(int))
-                        self.change_parameter_event.set()  # flag to notify there's a change of parameters is needed
+                        # self.change_parameter_event.set()  # flag to notify there's a change of parameters is needed
 
                     if self.stop_event.is_set():
                         break

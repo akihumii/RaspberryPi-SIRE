@@ -63,11 +63,11 @@ class CommandOdin:
     def send_stop_sequence(self):  # send stop sequence
         time.sleep(0.2)
         self.channel_enable = 0
+        self.send_channel_enable()
         self.amplitude = np.zeros(4, dtype=int)
         for i in range(self.num_channel):
             self.send_amplitude(i)
             time.sleep(0.04)
-        self.send_channel_enable()
         time.sleep(0.2)
         self.send_stop()
 

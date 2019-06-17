@@ -1,5 +1,6 @@
 from scipy import signal
 from numba.decorators import jit
+import numpy as np
 
 
 @jit
@@ -23,7 +24,9 @@ class Filtering:
 
         self.filter_obj = None
         self.filter_low_pass = None
-        self.filter_z = None  # initial condition of the filter
+        self.filter_z = None
+        self.filter_z_5 = None  # initial condition of the highpass/lowpass filter
+        self.filter_z_10 = None  # initial condition of the bandpass filter
         self.filter_b = None
         self.filter_a = None
         self.z_low_pass = None
@@ -33,8 +36,16 @@ class Filtering:
         self.high_pass_threshold = 0
         self.low_pass_threshold = 0
 
+        self.initialize_filter()
         self.set_filter_parameters(sampling_freq, hp_thresh, lp_thresh)
         self.set_filter()
+
+    def initialize_filter(self):
+        [filter_b, filter_a] = signal.butter(5, 100./500, 'hp')
+        self.filter_z_5 = signal.lfilter_zi(filter_b, filter_a)
+
+        [filter_b, filter_a] = signal.butter(5, [100./500, 450./500], 'band')
+        self.filter_z_10 = signal.lfilter_zi(filter_b, filter_a)
 
     def set_filter(self):
         # self.filter_obj = signal.firwin(self.__num_taps,[self.low_pass_threshold, self.high_pass_threshold], pass_zero=False)
@@ -45,21 +56,36 @@ class Filtering:
 
     def set_filter_coeff(self):
         self.filter_flag = True
+        filter_thresholds = 0
         if self.high_pass_threshold > 0 and self.low_pass_threshold > 0:
-            filter_thresholds = [self.high_pass_threshold, self.low_pass_threshold]
+            filter_thresholds = np.array([self.high_pass_threshold, self.low_pass_threshold])
             filter_type = 'band'
+            self.filter_flag = all(filter_thresholds > 0) and all(filter_thresholds < 1)
         elif self.high_pass_threshold > 0 and self.low_pass_threshold == 0:
             filter_thresholds = self.high_pass_threshold
             filter_type = 'hp'
+            self.filter_flag = 0 < filter_thresholds < 1
+
         elif self.high_pass_threshold == 0 and self.low_pass_threshold > 0:
             filter_thresholds = self.low_pass_threshold
             filter_type = 'low'
+            self.filter_flag = 0 < filter_thresholds < 1
         else:
             self.filter_flag = False
 
         if self.filter_flag:
             [self.filter_b, self.filter_a] = signal.butter(
                 self.__order, filter_thresholds, filter_type)
+
+        if self.filter_z is not None:
+            filter_z = signal.lfilter_zi(self.filter_b, self.filter_a)
+            if len(filter_z,) != len(self.filter_z):
+                if len(filter_z) == 5:
+                    self.filter_z_5 = filter_z
+                    self.filter_z = self.filter_z_5
+                elif len(filter_z) == 10:
+                    self.filter_z_10 = filter_z
+                    self.filter_z = self.filter_z_10
 
     def set_filter_parameters(self, sampling_freq, hp_thresh, lp_thresh):
         self.sampling_freq = sampling_freq
