@@ -61,6 +61,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.start_stimulation_address = 111
         self.stop_stimulation_address = 222
+        self.real_channel_enable_address = 100
         self.start_stimulation_initial = False
         self.stop_stimulation_initial = False
 
@@ -116,6 +117,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
+        self.real_channel_enable_flag = False
         self.flag_multi_channel = False
         self.flag_reset = False
         self.flag_save_new = False
@@ -141,8 +143,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         while True:
             self.check_change_parameter()
+            self.check_saving_flag()
             if self.pin_sh_obj.input_GPIO():
-                self.check_saving_flag()
                 self.check_stimulation_flag()
                 self.check_reset_flag()
                 self.check_classify_dimension()
@@ -239,10 +241,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.prediction = bitwise_operation.edit_bit(i, prediction >> i & 1, self.prediction)  # function of classification_decision
 
     def save_file(self, command_temp):
-        command_array = np.zeros([self.size_temp, 12])  # create an empty command array
+        command_array = np.zeros([self.size_temp, 11])  # create an empty command array
 
-        if command_temp is not None:
-            command_array[0, 1] = command_temp[1]  # replace the first row & second and third column with [address, value]
+        # if command_temp is not None:
+        #     command_array[:, 1] = command_temp[1]  # replace the first row & second and third column with [address, value]
         if self.start_stimulation_initial:
             command_array[1, 0] = self.start_stimulation_address  # replace the second row first column with starting address
             self.start_stimulation_initial = False
@@ -250,17 +252,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             command_array[1, 0] = self.stop_stimulation_address  # replace the second row first column with starting address
             self.stop_stimulation_initial = False
 
+        if self.real_channel_enable_flag:
+            command_array[0, 0] = self.real_channel_enable_address
+            self.real_channel_enable_flag = False
+
         # if any(self.prediction_changed_flag):
-        command_array[:, 0] = self.prediction
-        command_array[:, 11] = self.odin_obj.frequency
+        # command_array[:, 0] = self.prediction
+        command_array[:, 10] = self.odin_obj.frequency
 
         if self.start_stimulation_flag:
-            command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
+            command_array[:, 1] = self.prediction  # replace the forth column with the current prediction
         else:
-            command_array[:, 2] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
+            command_array[:, 1] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
 
-        command_array[:, 3:7] = self.odin_obj.amplitude
-        command_array[:, 7:11] = self.odin_obj.pulse_duration
+        command_array[:, 2:6] = self.odin_obj.amplitude
+        command_array[:, 6:10] = self.odin_obj.pulse_duration
 
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
@@ -310,14 +316,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         return features
 
     def update_on_off(self, data):
-        address = {
-            0xF8: self.odin_obj.send_start,
-            0x8F: self.odin_obj.send_stop,
-        }
-        address.get(data[0])()
+        if data[0] == 0xF8:
+            if data[1] == 0xF8:
+                self.odin_obj.send_start()
+            elif data[1] == 100:
+                self.real_channel_enable_flag = True
+        elif data[0] == 0x8F:
+            self.odin_obj.send_stop()
         print('updated on/off status...')
         print(data)
-        # time.sleep(0.04)
 
     def update_channel_enable(self, data):
         self.prediction = data[1]
@@ -524,15 +531,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def check_change_parameter(self):
         # if self.change_parameter_event.is_set():
-            if not self.change_parameter_queue.empty():
-                try:
-                    data_parameter = self.change_parameter_queue.get()
-                    # print(data_parameter)
-                    self.address.get(data_parameter[0])(data_parameter)
-                    # self.change_parameter_event.clear()
-                except TypeError:
-                    print('failed to update the command:')
-                    print(data_parameter)
+        while not self.change_parameter_queue.empty():
+            try:
+                data_parameter = self.change_parameter_queue.get()
+                # print(data_parameter)
+                self.address.get(data_parameter[0])(data_parameter)
+                # self.change_parameter_event.clear()
+            except TypeError:
+                print('failed to update the command:')
+                print(data_parameter)
 
     def check_classify_dimension(self):
         start_flag = not self.flag_multi_channel
@@ -593,14 +600,17 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             print('stopped stimulation...')
             self.start_stimulation_flag = False
             self.stop_stimulation_initial = True
+            amp_temp = self.odin_obj.amplitude
             self.odin_obj.send_stop_sequence()  # send stop bit to odin
+            self.odin_obj.amplitude = amp_temp
 
     def check_saving_flag(self):
         stop_flag = not self.flag_save_new
         start_flag = self.flag_save_new
-        if self.pin_sh_obj.input_GPIO():  # hardware
-            stop_flag = stop_flag and self.pin_save_obj.input_GPIO()
-            start_flag = start_flag and not self.pin_save_obj.input_GPIO()
+        stop_flag = stop_flag and self.pin_save_obj.input_GPIO()
+        start_flag = start_flag and not self.pin_save_obj.input_GPIO()
+        # if self.pin_sh_obj.input_GPIO():  # hardware
+        #     pass
 
         if stop_flag:  # start a new file to save
             self.saving_file = Saving()
