@@ -99,6 +99,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xD5: self.update_overlap_window_size,
             0xD6: self.update_sampling_freq,
             0xDA: self.update_extend_stimulation
+            0xDB: self.update_classify_dimention,
+            0xDC: self.update_closed_loop,
+            0xDD: self.update_reset_flag,
+            0xDE: self.update_stimulation_flag,
+            0xDF: self.update_saving_flag
         }
 
         self.stim_threshold_upper = 10
