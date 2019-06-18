@@ -10,30 +10,31 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, robot_hand_output, method_classify, features_id,  method_io, pin_led, channel_len, window_class, window_overlap, sampling_freq, extend_stim, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event):
+    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event):
         multiprocessing.Process.__init__(self)
-        ClassificationDecision.__init__(self, method_io, pin_led, 'out', robot_hand_output)
+        ClassificationDecision.__init__(self, param.method_io, param.pin_led, 'out', param.robot_hand_output)
 
         self.clf = None
-        self.sampling_freq = sampling_freq
-        self.window_class = window_class  # seconds
-        self.window_overlap = window_overlap  # seconds
+        self.sampling_freq = param.sampling_freq
+        self.window_class = param.window_class  # seconds
+        self.window_overlap = param.window_overlap  # seconds
         self.ring_event = ring_event
         self.ring_queue = ring_queue
-        self.features_id = features_id
-        self.pin_stim_obj = pin_stim_obj
-        self.pin_sm_channel_obj = pin_sm_channel_obj
-        self.method_io = method_io
+        self.features_id = param.features_id
+        self.pin_stim_obj = pins_obj.pin_stim_obj
+        self.pin_sm_channel_obj = pins_obj.pin_sm_channel_obj
+        self.method_io = param.method_io
+        self.pin_sh_obj = pins_obj.pin_sh_obj  # software hardware object, HIGH for hardware, LOW for software
 
-        self.robot_hand_output = robot_hand_output
+        self.robot_hand_output = param.robot_hand_output
 
         method_classify_all = {
             'features': self.classify_features,
             'thresholds': self.classify_thresholds
         }
-        self.classify_function = method_classify_all.get(method_classify)
+        self.classify_function = method_classify_all.get(param.method_classify)
 
-        self.__channel_len = channel_len
+        self.__channel_len = param.channel_len
 
         self.data = []
         self.data_temp = []
@@ -47,16 +48,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.prediction = 0
         self.prediction_changed_flag = []
 
-        self.extend_stim_orig = extend_stim  # extend the stimulation for a time
+        self.extend_stim_orig = param.extend_stim  # extend the stimulation for a time
         self.extend_stim = []
         self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
 
-        self.pin_reset_obj = pin_reset_obj
+        self.pin_reset_obj = pins_obj.pin_reset_obj
 
-        self.pin_save_obj = pin_save_obj
+        self.pin_save_obj = pins_obj.pin_save_obj
         self.saving_file = Saving()
 
-        self.pin_closed_loop_obj = pin_closed_loop_obj
+        self.pin_closed_loop_obj = pins_obj.pin_closed_loop_obj
 
         self.start_stimulation_address = 111
         self.stop_stimulation_address = 222
@@ -134,12 +135,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.data = np.append(self.data, self.ring_queue.get(), axis=0)
 
         while True:
-            self.check_saving_flag()
-            self.check_stimulation_flag()
-            self.check_reset_flag()
-            self.check_classify_dimension()
             self.check_change_parameter()
-            self.check_closed_loop()
+            if self.pin_sh_obj.input_GPIO():  # hardware
+                self.check_saving_flag()
+                self.check_stimulation_flag()
+                self.check_reset_flag()
+                self.check_classify_dimension()
+                self.check_closed_loop()
 
             # start classifying when data in ring queue has enough data
             if not self.ring_queue.empty():  # loop until ring queue has some thing
@@ -434,6 +436,26 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('updated extend stimulation...')
         print(data)
 
+    def update_classify_dimention(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            self.flag_multi_channel = not self.flag_multi_channel
+
+    def update_closed_loop(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            self.flag_closed_loop = not self.flag_closed_loop
+
+    def update_reset_flag(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            self.flag_reset = not self.flag_reset
+
+    def update_stimulation_flag(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            self.start_stimulation_flag = not self.start_stimulation_flag
+
+    def update_saving_flag(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            self.flag_save_new = not self.flag_save_new
+
     def change_channel_enable(self):
         self.odin_obj.channel_enable = self.prediction
         command = self.odin_obj.send_channel_enable()
@@ -456,7 +478,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     self.extend_stim[i] = self.extend_stim_orig
 
     def check_closed_loop(self):
-        if not self.flag_closed_loop and not self.pin_closed_loop_obj.input_GPIO():
+        start_flag = not self.flag_closed_loop
+        stop_flag = self.flag_closed_loop
+        if self.pin_sh_obj.input_GPIO():
+            start_flag = start_flag and not self.pin_closed_loop_obj.input_GPIO()
+            stop_flag = stop_flag and self.pin_closed_loop_obj.input_GPIO()
+
+        if start_flag:
             self.flag_closed_loop = True
             if not np.array(self.odin_obj.channel_enable).all():
                 self.odin_obj.channel_enable = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 3    # enable all channels after toggling to closed-loop mode
@@ -464,7 +492,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             print('switched to closed-loop mode...')
             time.sleep(0.1)
 
-        if self.flag_closed_loop and self.pin_closed_loop_obj.input_GPIO():
+        if stop_flag:
             self.flag_closed_loop = False
             print('switched to single stimulation mode...')
             time.sleep(0.1)
@@ -482,20 +510,31 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     print(data_parameter)
 
     def check_classify_dimension(self):
-        if not self.flag_multi_channel and self.pin_sm_channel_obj.input_GPIO():  # switch to multi-channel classification
+        start_flag = not self.flag_multi_channel
+        stop_flag = self.flag_multi_channel
+        if self.pin_sh_obj.input_GPIO():
+            start_flag = start_flag and self.pin_sm_channel_obj.input_GPIO()
+            stop_flag = stop_flag and not self.pin_sm_channel_obj.input_GPIO()
+
+        if start_flag:  # switch to multi-channel classification
             self.flag_multi_channel = True
             time.sleep(0.1)
             self.load_classifier()
             print('switched to multi-channel classification mode...')
 
-        if self.flag_multi_channel and not self.pin_sm_channel_obj.input_GPIO():  # switch to single-channel classification
+        if stop_flag:  # switch to single-channel classification
             self.flag_multi_channel = False
             time.sleep(0.1)
             self.load_classifier()
             print('switch to single-channel classification mode...')
 
     def check_reset_flag(self):
-        if not self.flag_reset and self.pin_reset_obj.input_GPIO():  # reload parameters
+        start_flag = not self.flag_reset
+        stop_flag = self.flag_reset
+        if self.pin_sh_obj.input_GPIO():
+            start_flag = start_flag and self.pin_reset_obj.input_GPIO()
+            stop_flag = stop_flag and not self.pin_reset_obj.input_GPIO()
+        if start_flag:  # reload parameters
             self.flag_reset = True
             # self.thresholds = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
             self.odin_obj.get_coefficients()
@@ -506,33 +545,45 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             # print(self.thresholds)
             time.sleep(0.1)
 
-        if self.flag_reset and not self.pin_reset_obj.input_GPIO():
+        if stop_flag:
             self.flag_reset = False
             print('reset flag changed to False...')
             time.sleep(0.1)
 
     def check_stimulation_flag(self):
-        if not self.start_stimulation_flag and self.pin_stim_obj.input_GPIO():  # send starting sequence to stimulator
+        start_flag = not self.start_stimulation_flag
+        stop_flag = self.start_stimulation_flag
+        if self.pin_sh_obj.input_GPIO():  # hardware
+            start_flag = start_flag and self.pin_stim_obj.input_GPIO()
+            stop_flag = stop_flag and not self.pin_stim_obj.input_GPIO()
+
+        if start_flag:  # send starting sequence to stimulator
             print('started stimulation...')
             self.start_stimulation_flag = True  # start the stimulation
             self.start_stimulation_initial = True  # to insert initial flag in saved file
             self.odin_obj.send_start_sequence()  # send start bit to odin
             self.change_channel_enable()  # send a channel enable that is the current prediction
 
-        if self.start_stimulation_flag and not self.pin_stim_obj.input_GPIO():  # send ending sequence to setimulator
+        if stop_flag:  # send ending sequence to setimulator
             print('stopped stimulation...')
             self.start_stimulation_flag = False
             self.stop_stimulation_initial = True
             self.odin_obj.send_stop_sequence()  # send stop bit to odin
 
     def check_saving_flag(self):
-        if not self.flag_save_new and self.pin_save_obj.input_GPIO():  # start a new file to save
+        stop_flag = not self.flag_save_new
+        start_flag = self.flag_save_new
+        if self.pin_sh_obj.input_GPIO():  # hardware
+            stop_flag = stop_flag and self.pin_save_obj.input_GPIO()
+            start_flag = start_flag and not self.pin_save_obj.input_GPIO()
+
+        if stop_flag:  # start a new file to save
             self.saving_file = Saving()
             self.flag_save_new = True
             print('stop saving...')
             time.sleep(0.1)
 
-        if self.flag_save_new and not self.pin_save_obj.input_GPIO():
+        if start_flag:
             self.flag_save_new = False
             print('resume saving with a new file...')
             time.sleep(0.1)
