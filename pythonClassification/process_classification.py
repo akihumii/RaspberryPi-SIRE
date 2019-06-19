@@ -25,14 +25,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.pin_sm_channel_obj = pins_obj.pin_sm_channel_obj
         self.method_io = param.method_io
         self.pin_sh_obj = pins_obj.pin_sh_obj  # software hardware object, HIGH for hardware, LOW for software
+        self.pin_classify_method_obj = pins_obj.pin_classify_method_obj
 
         self.robot_hand_output = param.robot_hand_output
 
-        method_classify_all = {
+        self.method_classify_all = {
             'features': self.classify_features,
             'thresholds': self.classify_thresholds
         }
-        self.classify_function = method_classify_all.get(param.method_classify)
+        self.classify_method = param.method_classify
+        self.classify_function = self.method_classify_all.get(self.classify_method)
 
         self.__channel_len = param.channel_len
 
@@ -104,7 +106,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xDC: self.update_closed_loop,
             0xDD: self.update_reset_flag,
             0xDE: self.update_stimulation_flag,
-            0xDF: self.update_saving_flag
+            0xDF: self.update_saving_flag,
+            0xE0: self.update_classify_methods
         }
 
         self.stim_threshold_upper = 10
@@ -122,6 +125,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.flag_reset = False
         self.flag_save_new = False
         self.flag_closed_loop = False
+        self.flag_classify_method = False
 
     def run(self):
         time.sleep(1)  # wait for other threads to start running
@@ -461,6 +465,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             print('updated classify dimensoin...')
             print(data)
 
+    def update_classify_methods(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            value = {
+                9: 'thresholds',
+                10: 'features'
+            }
+            self.classify_function = self.method_classify_all.get(value.get(data[1]))
+            print('updated classify method to %s...' % value.get(data[1]))
+            print(data)
+
     def update_closed_loop(self, data):
         if not self.pin_sh_obj.input_GPIO():
             self.check_closed_loop()
@@ -511,6 +525,37 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     self.extend_stim_flag[i] = False
                     self.extend_stim[i] = self.extend_stim_orig
 
+    def check_change_parameter(self):
+        # if self.change_parameter_event.is_set():
+        while not self.change_parameter_queue.empty():
+            try:
+                data_parameter = self.change_parameter_queue.get()
+                # print(data_parameter)
+                self.address.get(data_parameter[0])(data_parameter)
+                # self.change_parameter_event.clear()
+            except TypeError:
+                print('failed to update the command:')
+                print(data_parameter)
+
+    def check_classify_method(self):
+        start_flag = not self.flag_classify_method
+        stop_flag = self.flag_classify_method
+        if self.pin_sh_obj.input_GPIO():
+            start_flag = start_flag and self.pin_classify_method_obj.input_GPIO()
+            stop_flag = stop_flag and not self.pin_classify_method_obj.input_GPIO()
+
+        if start_flag:  # switch to feature extraction
+            self.flag_classify_method = True
+            self.classify_function = self.method_classify_all.get('features')
+            time.sleep(0.1)
+            print('switched to feature classification mode...')
+
+        if stop_flag:  # swithc to thresholding classification
+            self.flag_classify_method = False
+            self.classify_function = self.method_classify_all.get('thresholds')
+            time.sleep(0.1)
+            print('switched to thresholding classification mode...')
+
     def check_closed_loop(self):
         start_flag = not self.flag_closed_loop
         stop_flag = self.flag_closed_loop
@@ -530,18 +575,6 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.flag_closed_loop = False
             print('switched to single stimulation mode...')
             time.sleep(0.1)
-
-    def check_change_parameter(self):
-        # if self.change_parameter_event.is_set():
-        while not self.change_parameter_queue.empty():
-            try:
-                data_parameter = self.change_parameter_queue.get()
-                # print(data_parameter)
-                self.address.get(data_parameter[0])(data_parameter)
-                # self.change_parameter_event.clear()
-            except TypeError:
-                print('failed to update the command:')
-                print(data_parameter)
 
     def check_classify_dimension(self):
         start_flag = not self.flag_multi_channel
