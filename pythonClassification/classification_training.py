@@ -55,6 +55,6 @@ def train(file_feature, file_class):
 if __name__ == "__main__":
     # train('C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp')
     # train('C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized')
-    # train(str(sys.argv[1]), str(sys.argv[2]))
-    train('featuresCh4_data_20190131_134012_20190507122133_20190507122144.csv',
-          'classCh4_data_20190131_134012_20190507122133_20190507122144.csv')
+    train(str(sys.argv[1]), str(sys.argv[2]))
+    # train('featuresCh4_data_20190131_134012_20190507122133_20190507122144.csv',
+    #       'classCh4_data_20190131_134012_20190507122133_20190507122144.csv')
