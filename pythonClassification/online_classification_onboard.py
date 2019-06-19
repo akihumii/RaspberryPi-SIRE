@@ -41,7 +41,7 @@ PARAM.pin_off = 21  # HIGH to close all ports and objects; LOW to start running 
 PARAM.pin_closed_loop = 19  # HIGH for single stimulation channel enable mode; LOW for close-loop step-size up-and-down mode
 PARAM.pin_sh = 5  # HIGH for hardware control, LOW for software control
 PARAM.method_io = 'serial'  # METHOD for output display
-PARAM.method_classify = 'thresholds'  # input 'features' or 'thresholds'
+PARAM.method_classify = 'features'  # input 'features' or 'thresholds'
 PARAM.robot_hand_output = '4F'  # input 'PSS' or '4F' or 'combo'
 # THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
 
