@@ -12,46 +12,48 @@ from bypass_data import BypassData
 from classification_decision import ClassificationDecision
 from saving import Saving
 
-IP_SYLPH = "127.0.0.1"
-IP_ODIN = "192.168.4.1"
-IP_GUI = "192.168.4.3"
-IP_STIMULATOR = ""
-PORT_SYLPH = 8888
-PORT_ODIN = 30000
-PORT_GUI = 8000
-PORT_STIMULATOR = 0
+PARAM = lambda: 0
+PARAM.ip_sylph = "127.0.0.1"
+PARAM.ip_odin = "192.168.4.1"
+PARAM.ip_gui = "192.168.4.3"
+PARAM.ip_stimulator = ""
+PARAM.port_sylph = 8888
+PARAM.port_odin = 30000
+PARAM.port_gui = 8000
+PARAM.port_stimulator = 0
 
-BUFFER_SIZE = 25 * 65  # about 50 ms
-BUFFER_SIZE_SENDING = 2  # buffer size to send data to socket
-RINGBUFFER_SIZE = 40960
-CHANNEL_LEN = 10
-CHANNEL_DECODE = [4, 5, 6, 7]
-PIN_LED = [[18, 4],
-           [17, 27],
-           [22, 5],
-           [6, 13]]
+PARAM.buffer_size = 25 * 65  # about 50 ms
+PARAM.buffer_size_sending = 2  # buffer size to send data to socket
+PARAM.ringbuffer_size = 40960
+PARAM.channel_len = 10
+PARAM.channel_decode = [4, 5, 6, 7]
+PARAM.pin_led = [[18, 4],
+                 [17, 27],
+                 [22, 5],
+                 [6, 13]]
 
-FEATURES_ID = [5, 7]
-PIN_STIM = 24  # HIGH to start sending command to stimulator
-PIN_SM_CHANNEL = 25  # HIGH for multi-channel classification; LOW for single-channel classification
-PIN_RESET = 12  # HIGH to reset the parameters and send the updated command to stimulator
-PIN_SAVE = 16  # HIGH to stop saving; LOW to start a new csv file to save the counter and stimulation command
-PIN_OFF = 21  # HIGH to close all ports and objects; LOW to start running the program again
-PIN_CLOSED_LOOP = 19  # HIGH for single stimulation channel enable mode; LOW for close-loop step-size up-and-down mode
-METHOD_IO = 'serial'  # METHOD for output display
-METHOD_CLASSIFY = 'thresholds'  # input 'features' or 'thresholds'
-ROBOT_HAND_OUTPUT = '4F'  # input 'PSS' or '4F' or 'combo'
+PARAM.features_id = [5, 7]
+PARAM.pin_stim = 24  # HIGH to start sending command to stimulator
+PARAM.pin_sm_channel = 25  # HIGH for multi-channel classification; LOW for single-channel classification
+PARAM.pin_reset = 12  # HIGH to reset the parameters and send the updated command to stimulator
+PARAM.pin_save = 16  # HIGH to stop saving; LOW to start a new csv file to save the counter and stimulation command
+PARAM.pin_off = 21  # HIGH to close all ports and objects; LOW to start running the program again
+PARAM.pin_closed_loop = 19  # HIGH for single stimulation channel enable mode; LOW for close-loop step-size up-and-down mode
+PARAM.pin_sh = 5  # HIGH for hardware control, LOW for software control
+PARAM.method_io = 'serial'  # METHOD for output display
+PARAM.method_classify = 'thresholds'  # input 'features' or 'thresholds'
+PARAM.robot_hand_output = '4F'  # input 'PSS' or '4F' or 'combo'
 # THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
 
-WINDOW_CLASS = 0.2  # second
-WINDOW_OVERLAP = 0.05  # second
-SAMPLING_FREQ = 1250  # sample/second
+PARAM.window_class = 0.2  # second
+PARAM.window_overlap = 0.05  # second
+PARAM.sampling_freq = 1250  # sample/second
 
-EXTEND_STIM = 0.2  # extend the stimulation for a time (seconds)
+PARAM.extend_stim = 0.2  # extend the stimulation for a time (seconds)
 
-HP_THRESH = 100
-LP_THRESH = 499
-NOTCH_THRESH = 50
+PARAM.hp_thresh = 100
+PARAM.lp_thresh = 499
+PARAM.notch_thresh = 50
 
 
 def wave_signal(number, flag):
@@ -86,35 +88,45 @@ def wave_signal(number, flag):
     return number, flag
 
 
+def set_pins():
+    pins_obj = lambda: 0
+    pins_obj.pin_stim_obj = ConfigGPIO(PARAM.pin_stim, 'in')
+    pins_obj.pin_stim_obj.setup_GPIO()
+
+    pins_obj.pin_sm_channel_obj = ConfigGPIO(PARAM.pin_sm_channel, 'in', pull_up_down='up')
+    pins_obj.pin_sm_channel_obj.setup_GPIO()
+
+    pins_obj.pin_reset_obj = ConfigGPIO(PARAM.pin_reset, 'in', pull_up_down='up')
+    pins_obj.pin_reset_obj.setup_GPIO()
+
+    pins_obj.pin_save_obj = ConfigGPIO(PARAM.pin_save, 'in', pull_up_down='up')
+    pins_obj.pin_save_obj.setup_GPIO()
+
+    pins_obj.pin_closed_loop_obj = ConfigGPIO(PARAM.pin_closed_loop, 'in', pull_up_down='up')
+    pins_obj.pin_closed_loop_obj.setup_GPIO()
+
+    pins_obj.pin_off_obj = ConfigGPIO(PARAM.pin_off, 'in', pull_up_down='up')
+    pins_obj.pin_off_obj.setup_GPIO()
+
+    pins_obj.pin_sh_obj = ConfigGPIO(PARAM.pin_sh, 'in', pull_up_down='up')
+    pins_obj.pin_sh_obj.setup_GPIO()
+
+    return pins_obj
+
+
 if __name__ == "__main__":
-    pin_stim_obj = ConfigGPIO(PIN_STIM, 'in')
-    pin_stim_obj.setup_GPIO()
-
-    pin_sm_channel_obj = ConfigGPIO(PIN_SM_CHANNEL, 'in', pull_up_down='up')
-    pin_sm_channel_obj.setup_GPIO()
-
-    pin_reset_obj = ConfigGPIO(PIN_RESET, 'in', pull_up_down='up')
-    pin_reset_obj.setup_GPIO()
-
-    pin_save_obj = ConfigGPIO(PIN_SAVE, 'in', pull_up_down='up')
-    pin_save_obj.setup_GPIO()
-
-    pin_closed_loop_obj = ConfigGPIO(PIN_CLOSED_LOOP, 'in', pull_up_down='up')
-    pin_closed_loop_obj.setup_GPIO()
-
-    pin_off_obj = ConfigGPIO(PIN_OFF, 'in', pull_up_down='up')
-    pin_off_obj.setup_GPIO()
+    pins_obj = set_pins()
 
     count = 1
 
-    serial_obj = ClassificationDecision(METHOD_IO, PIN_LED, 'out', ROBOT_HAND_OUTPUT)
+    serial_obj = ClassificationDecision(PARAM.method_io, PARAM.pin_led, 'out', PARAM.robot_hand_output)
     serial_obj.setup()
 
     current_sign = 1
     hidden_flag = False
 
     while True:
-        if not pin_off_obj.input_GPIO():
+        if not pins_obj.pin_off_obj.input_GPIO():
             stop_event = multiprocessing.Event()  # to close all ports and objects in all threads
             stop_event.clear()
 
@@ -128,9 +140,9 @@ if __name__ == "__main__":
             change_parameter_queue = multiprocessing.Queue()  # to save the signal for parameter changing
             filter_parameters_queue = multiprocessing.Queue()  # for thread_bypass_data to store filtering parameters for dataHandler to use
 
-            tcp_ip_sylph = TcpIp(IP_SYLPH, PORT_SYLPH, BUFFER_SIZE)  # create sylph socket object
-            tcp_ip_odin = TcpIp(IP_ODIN, PORT_ODIN, BUFFER_SIZE_SENDING)  # create odin socket object
-            tcp_ip_gui = TcpIp(IP_GUI, PORT_GUI, BUFFER_SIZE_SENDING)  # create gui socket object
+            tcp_ip_sylph = TcpIp(PARAM.ip_sylph, PARAM.port_sylph, PARAM.buffer_size)  # create sylph socket object
+            tcp_ip_odin = TcpIp(PARAM.ip_odin, PARAM.port_odin, PARAM.buffer_size_sending)  # create odin socket object
+            tcp_ip_gui = TcpIp(PARAM.ip_gui, PARAM.port_gui, PARAM.buffer_size_sending)  # create gui socket object
 
             thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, filter_parameters_queue, stop_event)  # send data to GUI in another thread
             thread_bypass_data.start()  # start thread to bypass data to GUI
@@ -145,9 +157,9 @@ if __name__ == "__main__":
 
             ring_queue = multiprocessing.Queue()  # saved data across threads
 
-            data_obj = DataHandler(CHANNEL_LEN, SAMPLING_FREQ, HP_THRESH, LP_THRESH, NOTCH_THRESH)  # create data class
+            data_obj = DataHandler(PARAM)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pin_sm_channel_obj, pin_reset_obj, pin_save_obj, pin_closed_loop_obj, ROBOT_HAND_OUTPUT, METHOD_CLASSIFY, FEATURES_ID, METHOD_IO, PIN_LED, CHANNEL_LEN, WINDOW_CLASS, WINDOW_OVERLAP, SAMPLING_FREQ, EXTEND_STIM, ring_event, ring_queue, pin_stim_obj, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pins_obj, PARAM, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 
@@ -167,7 +179,7 @@ if __name__ == "__main__":
                     data_obj.fill_ring_data(ring_queue)  # fill the ring buffer for classification thread
                     # saving_obj.save(data_obj.data_raw, "a")
 
-                if pin_off_obj.input_GPIO():
+                if pins_obj.pin_off_obj.input_GPIO():
                     stop_event.set()  # stop all the other threads
 
                     thread_bypass_data.join()

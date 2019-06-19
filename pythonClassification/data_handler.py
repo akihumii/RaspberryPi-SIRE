@@ -58,25 +58,25 @@ def get_buffer_func(buffer_read, __flag_start_bit, __sample_len, __flag_end_bit,
 
 
 class DataHandler(Saving, Filtering):
-    def __init__(self, channel_len, sampling_freq, hp_thresh, lp_thresh, notch_thresh):
+    def __init__(self, param):
         Saving.__init__(self)
-        Filtering.__init__(self, sampling_freq, hp_thresh, lp_thresh, notch_thresh)
+        Filtering.__init__(self, param.sampling_freq, param.hp_thresh, param.lp_thresh, param.notch_thresh)
         self.data_raw = []
         self.data_processed = []
         self.buffer_process = []
         self.loc_start = []
         self.loc_start_orig = []
 
-        self.sampling_freq = sampling_freq
-        self.hp_thresh = hp_thresh
-        self.lp_thresh = lp_thresh
-        self.notch_thresh = notch_thresh
+        self.sampling_freq = param.sampling_freq
+        self.hp_thresh = param.hp_thresh
+        self.lp_thresh = param.lp_thresh
+        self.notch_thresh = param.notch_thresh
 
         self.__flag_start_bit = 165
         self.__flag_end_bit = 90
         self.__flag_sync_pulse = [0, 255]
         self.__sample_len = 25
-        self.__channel_len = channel_len
+        self.__channel_len = param.channel_len
         self.__sync_pulse_len = 1
         self.__counter_len = 1
         self.__ring_column_len = self.__channel_len + self.__sync_pulse_len + self.__counter_len
