@@ -4,6 +4,7 @@ import numpy as np
 import pickle
 import time
 import bitwise_operation
+import glob
 from saving import Saving
 from classification_decision import ClassificationDecision
 from features import Features
@@ -107,7 +108,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xDD: self.update_reset_flag,
             0xDE: self.update_stimulation_flag,
             0xDF: self.update_classify_methods,
-            0xE0: self.update_saving_flag
+            0xE0: self.update_saving_flag,
+            0xE1: self.update_saving_transfer
         }
 
         self.stim_threshold_upper = 10
@@ -508,6 +510,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.check_saving_flag()
             print('updated saving flag...')
             print(data)
+
+    def update_saving_transfer(self, data):
+        files = glob.glob('/home/pi/Data/*.csv')
+        for x in files:
+            try:
+                os.remove(x)
+            except OSError:
+                print("Error while deleting file: %s" % x)
+        print('removed recorded files...')
 
     def change_channel_enable(self):
         self.odin_obj.channel_enable = self.prediction
