@@ -42,7 +42,7 @@ PARAM.pin_closed_loop = 19  # HIGH for single stimulation channel enable mode; L
 PARAM.pin_sh = 5  # HIGH for hardware control, LOW for software control
 PARAM.pin_classify_method = 27  # HIGH for feature, LOW for thresholding classification
 PARAM.method_io = 'serial'  # METHOD for output display
-PARAM.method_classify = 'thresholds'  # input 'features' or 'thresholds'
+PARAM.method_classify = 'features'  # input 'features' or 'thresholds'
 PARAM.robot_hand_output = '4F'  # input 'PSS' or '4F' or 'combo'
 # THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
 
