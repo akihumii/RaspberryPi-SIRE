@@ -106,8 +106,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xDC: self.update_closed_loop,
             0xDD: self.update_reset_flag,
             0xDE: self.update_stimulation_flag,
-            0xDF: self.update_saving_flag,
-            0xE0: self.update_classify_methods
+            0xDF: self.update_classify_methods,
+            0xE0: self.update_saving_flag
         }
 
         self.stim_threshold_upper = 10
@@ -123,7 +123,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.real_channel_enable_flag = False
         self.flag_multi_channel = False
         self.flag_reset = False
-        self.flag_save_new = False
+        self.flag_save_new = True
         self.flag_closed_loop = False
         self.flag_classify_method = False
 
@@ -147,8 +147,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         while True:
             self.check_change_parameter()
-            self.check_saving_flag()
             if self.pin_sh_obj.input_GPIO():
+                self.check_saving_flag()
                 self.check_stimulation_flag()
                 self.check_reset_flag()
                 self.check_classify_dimension()
@@ -500,6 +500,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def update_saving_flag(self, data):
         if not self.pin_sh_obj.input_GPIO():
+            value = {
+                8: False,
+                9: True
+            }
+            self.flag_save_new = value.get(data[1])
             self.check_saving_flag()
             print('updated saving flag...')
             print(data)
@@ -642,10 +647,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
     def check_saving_flag(self):
         stop_flag = not self.flag_save_new
         start_flag = self.flag_save_new
-        stop_flag = stop_flag and self.pin_save_obj.input_GPIO()
-        start_flag = start_flag and not self.pin_save_obj.input_GPIO()
-        # if self.pin_sh_obj.input_GPIO():  # hardware
-        #     pass
+        if self.pin_sh_obj.input_GPIO():  # hardware
+            stop_flag = stop_flag and self.pin_save_obj.input_GPIO()
+            start_flag = start_flag and not self.pin_save_obj.input_GPIO()
 
         if stop_flag:  # start a new file to save
             self.saving_file = Saving()
