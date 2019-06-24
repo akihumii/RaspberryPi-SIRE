@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 import os
-import classificationTraining
+import classification_training
 
 
 def predict_features(clf, features, classes=[]):
@@ -18,10 +18,7 @@ def predict_features(clf, features, classes=[]):
         return classes_predicted
 
 
-def visualize_features(plot_flag):
-    target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp'
-    # target_dir = 'C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized'
-
+def visualize_features(plot_flag, target_dir):
     file_feature = [f for f in os.listdir(target_dir) if f.startswith('featuresCh')]
 
     file_class = [f for f in os.listdir(target_dir) if f.startswith('classCh')]
@@ -55,7 +52,7 @@ def visualize_features(plot_flag):
 
         # get the testing set
         training_ratio = 0.7
-        [features_testing, classes_testing] = classificationTraining.get_partial_set(features_normalized, classes, training_ratio, 'testing')
+        [features_testing, classes_testing] = classification_training.get_partial_set(features_normalized, classes, training_ratio, 'testing')
 
         # classify
         prediction[i] = predict_features(clf, features_testing, classes_testing)
@@ -102,12 +99,11 @@ def visualize_features(plot_flag):
     return prediction
 
 
-def multiple_prediction(num_repetition):
-    target_file = 'F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp'
+def multiple_prediction(num_repetition, target_dir, plot_flag):
     prediction_all = []
     for i in range(num_repetition):
-        classificationTraining.train(target_file)
-        prediction = visualize_features(False)
+        classification_training.train(target_dir)
+        prediction = visualize_features(plot_flag, target_dir)
         prediction_all.append(prediction)
 
     prediction_all = np.array(prediction_all)
@@ -121,4 +117,12 @@ def multiple_prediction(num_repetition):
                 prediction_median=prediction_median,
                 prediction_5_perc=prediction_5_perc,
                 prediction_95_perc=prediction_95_perc)
+
+
+if __name__ == "__main__":
+    target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\visualization'
+    # target_dir = 'C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized'
+    plot_flag = True
+    num_repeatition = 1
+    prediction_output = multiple_prediction(num_repeatition, target_dir, plot_flag)
 

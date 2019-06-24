@@ -89,6 +89,6 @@ def get_testing_locs(classes_each, training_ratio, num_bursts_min):
 
 
 if __name__ == "__main__":
-    train('F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp')
+    train('F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\visualization')
     # train('C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized')
     # train(str(sys.argv[1]))
