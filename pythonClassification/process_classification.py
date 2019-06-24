@@ -42,6 +42,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.data = []
         self.data_temp = []
         self.size_temp = 0
+        self.norms = []
         self.channel_decode = []
         self.channel_decode_default = np.array([4, 5, 6, 7])
         self.num_channel = len(self.channel_decode_default)
@@ -284,11 +285,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
             self.num_channel = self.odin_obj.num_channel
             self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
+            file_norms = [x for x in os.listdir('classificationTmp') if x.endswith('Cha.csv')]
+            self.norms = np.genfromtxt(os.path.join('classificationTmp', file_norms[0]), delimiter=',')
         else:  # single-channel classification
             filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
             self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
             self.num_channel = len(self.channel_decode)
             self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
+            file_norms = [x for x in os.listdir('classificationTmp') if x.startswith('normsCh') and not x.endswith('Cha.csv')]
+            self.norms = [np.genfromtxt(os.path.join('classificationTmp', x), delimiter=',') for x in file_norms]
         self.extend_stim = self.extend_stim_orig * np.ones(self.num_channel)
         self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
         print('loaded classifier...')
@@ -298,9 +303,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         if channel_i == 'all':  # for the case of multi-channel decoding
             features = np.array([self.extract_features(data[:, i]) for i in range(len(self.channel_decode_default))])
             features = np.hstack(np.transpose(np.vstack(features)))  # reconstruct into correct structure
+            features = features / self.norms
             prediction = self.clf.predict([features]) - 1
         else:
             features = self.extract_features(data)
+            features = features / self.norms[channel_i]
             prediction = self.clf[channel_i].predict([features]) - 1
         return int(prediction)
 
