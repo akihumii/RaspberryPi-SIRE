@@ -106,6 +106,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xD4: self.update_decoding_window_size,
             0xD5: self.update_overlap_window_size,
             0xD6: self.update_sampling_freq,
+            0xD7: self.update_hp_thresh,
+            0xD8: self.update_lp_thresh,
+            0xD9: self.update_notch_thresh,
             0xDA: self.update_extend_stimulation,
             0xDB: self.update_classify_dimention,
             0xDC: self.update_closed_loop,
@@ -465,19 +468,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(data)
 
     def update_hp_thresh(self, data):
-        print('updated highpass cutoff frequency...')
-        print(data)
-        self.hp_thresh = data
+        self.hp_thresh = data[1]
 
     def update_lp_thresh(self, data):
-        print('updated lowpass cutoff frequency...')
-        print(data)
-        self.lp_thresh = data
+        self.lp_thresh = data[1]
 
     def update_notch_thresh(self, data):
-        print('updated notch frequency...')
-        print(data)
-        self.notch_thresh = data
+        self.notch_thresh = data[1]
 
     def update_extend_stimulation(self, data):
         self.extend_stim_orig = data[1] / 1000.
