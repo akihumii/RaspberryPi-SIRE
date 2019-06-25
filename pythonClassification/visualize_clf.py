@@ -120,7 +120,8 @@ def multiple_prediction(num_repetition, target_dir, plot_flag):
 
 
 if __name__ == "__main__":
-    target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\visualization'
+    # target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\visualization'
+    target_dir = 'C:\\Data\\Info\\classificationTmp'
     # target_dir = 'C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized'
     plot_flag = True
     num_repeatition = 1
