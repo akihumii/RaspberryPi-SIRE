@@ -32,7 +32,7 @@ PARAM.pin_led = [[18, 4],
                  [22, 5],
                  [6, 13]]
 
-PARAM.features_id = [5, 7]
+PARAM.features_id = [5, 8]
 PARAM.pin_stim = 24  # HIGH to start sending command to stimulator
 PARAM.pin_sm_channel = 25  # HIGH for multi-channel classification; LOW for single-channel classification
 PARAM.pin_reset = 12  # HIGH to reset the parameters and send the updated command to stimulator
