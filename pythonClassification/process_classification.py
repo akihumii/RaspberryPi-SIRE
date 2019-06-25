@@ -17,6 +17,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.clf = None
         self.sampling_freq = param.sampling_freq
+        self.hp_thresh = 0
+        self.lp_thresh = 0
+        self.notch_thresh = 0
         self.window_class = param.window_class  # seconds
         self.window_overlap = param.window_overlap  # seconds
         self.ring_event = ring_event
@@ -42,6 +45,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.data = []
         self.data_temp = []
         self.size_temp = 0
+        self.norms = []
         self.channel_decode = []
         self.channel_decode_default = np.array([4, 5, 6, 7])
         self.num_channel = len(self.channel_decode_default)
@@ -102,6 +106,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xD4: self.update_decoding_window_size,
             0xD5: self.update_overlap_window_size,
             0xD6: self.update_sampling_freq,
+            0xD7: self.update_hp_thresh,
+            0xD8: self.update_lp_thresh,
+            0xD9: self.update_notch_thresh,
             0xDA: self.update_extend_stimulation,
             0xDB: self.update_classify_dimention,
             0xDC: self.update_closed_loop,
@@ -247,7 +254,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.prediction = bitwise_operation.edit_bit(i, prediction >> i & 1, self.prediction)  # function of classification_decision
 
     def save_file(self, command_temp):
-        command_array = np.zeros([self.size_temp, 11])  # create an empty command array
+        command_array = np.zeros([self.size_temp, 15])  # create an empty command array
 
         # if command_temp is not None:
         #     command_array[:, 1] = command_temp[1]  # replace the first row & second and third column with [address, value]
@@ -274,6 +281,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         command_array[:, 2:6] = self.odin_obj.amplitude
         command_array[:, 6:10] = self.odin_obj.pulse_duration
 
+        if self.classify_method == 'thresholds':
+            command_array[:, 11:15] = self.stim_threshold
+
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
         self.saving_file.save(np.hstack([self.data[-self.size_temp:, :], command_array]), "a")  # save the counter and the command
@@ -284,11 +294,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
             self.num_channel = self.odin_obj.num_channel
             self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
+            file_norms = [x for x in os.listdir('classificationTmp') if x.endswith('Cha.csv')]
+            self.norms = np.genfromtxt(os.path.join('classificationTmp', file_norms[0]), delimiter=',')
         else:  # single-channel classification
             filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
             self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
             self.num_channel = len(self.channel_decode)
             self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
+            file_norms = [x for x in os.listdir('classificationTmp') if x.startswith('normsCh') and not x.endswith('Cha.csv')]
+            self.norms = [np.genfromtxt(os.path.join('classificationTmp', x), delimiter=',') for x in file_norms]
         self.extend_stim = self.extend_stim_orig * np.ones(self.num_channel)
         self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
         print('loaded classifier...')
@@ -298,9 +312,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         if channel_i == 'all':  # for the case of multi-channel decoding
             features = np.array([self.extract_features(data[:, i]) for i in range(len(self.channel_decode_default))])
             features = np.hstack(np.transpose(np.vstack(features)))  # reconstruct into correct structure
+            features = features / self.norms
             prediction = self.clf.predict([features]) - 1
         else:
             features = self.extract_features(data)
+            features = features / self.norms[channel_i]
             prediction = self.clf[channel_i].predict([features]) - 1
         return int(prediction)
 
@@ -451,6 +467,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('updated sampling frequency...')
         print(data)
 
+    def update_hp_thresh(self, data):
+        self.hp_thresh = data[1]
+
+    def update_lp_thresh(self, data):
+        self.lp_thresh = data[1]
+
+    def update_notch_thresh(self, data):
+        self.notch_thresh = data[1]
+
     def update_extend_stimulation(self, data):
         self.extend_stim_orig = data[1] / 1000.
         print('updated extend stimulation...')
@@ -473,7 +498,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 9: 'thresholds',
                 10: 'features'
             }
-            self.classify_function = self.method_classify_all.get(value.get(data[1]))
+            self.classify_method = value.get(data[1])
+            self.classify_function = self.method_classify_all.get(self.classify_method)
             print('updated classify method to %s...' % value.get(data[1]))
             print(data)
 
@@ -670,6 +696,17 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         if start_flag:
             self.flag_save_new = False
+            command_array = np.zeros([1, np.size(self.data, 1)])  # create an empty command array
+            command_array[0, 0] = self.flag_multi_channel
+            command_array[0, 1] = self.flag_classify_method
+            command_array[0, 2] = self.window_class
+            command_array[0, 3] = self.window_overlap
+            command_array[0, 4] = self.sampling_freq
+            command_array[0, 5] = self.extend_stim_orig
+            command_array[0, 6] = self.hp_thresh
+            command_array[0, 7] = self.lp_thresh
+            command_array[0, 8] = self.notch_thresh
+            self.saving_file.save(command_array, "a")  # save the counter and the command
             print('resume saving with a new file...')
             time.sleep(0.1)
 
