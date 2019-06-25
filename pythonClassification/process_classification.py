@@ -17,6 +17,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.clf = None
         self.sampling_freq = param.sampling_freq
+        self.hp_thresh = 0
+        self.lp_thresh = 0
+        self.notch_thresh = 0
         self.window_class = param.window_class  # seconds
         self.window_overlap = param.window_overlap  # seconds
         self.ring_event = ring_event
@@ -248,7 +251,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.prediction = bitwise_operation.edit_bit(i, prediction >> i & 1, self.prediction)  # function of classification_decision
 
     def save_file(self, command_temp):
-        command_array = np.zeros([self.size_temp, 11])  # create an empty command array
+        command_array = np.zeros([self.size_temp, 15])  # create an empty command array
 
         # if command_temp is not None:
         #     command_array[:, 1] = command_temp[1]  # replace the first row & second and third column with [address, value]
@@ -274,6 +277,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         command_array[:, 2:6] = self.odin_obj.amplitude
         command_array[:, 6:10] = self.odin_obj.pulse_duration
+
+        if self.classify_method == 'thresholds':
+            command_array[:, 11:15] = self.stim_threshold
 
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
@@ -458,6 +464,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print('updated sampling frequency...')
         print(data)
 
+    def update_hp_thresh(self, data):
+        print('updated highpass cutoff frequency...')
+        print(data)
+        self.hp_thresh = data
+
+    def update_lp_thresh(self, data):
+        print('updated lowpass cutoff frequency...')
+        print(data)
+        self.lp_thresh = data
+
+    def update_notch_thresh(self, data):
+        print('updated notch frequency...')
+        print(data)
+        self.notch_thresh = data
+
     def update_extend_stimulation(self, data):
         self.extend_stim_orig = data[1] / 1000.
         print('updated extend stimulation...')
@@ -480,7 +501,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 9: 'thresholds',
                 10: 'features'
             }
-            self.classify_function = self.method_classify_all.get(value.get(data[1]))
+            self.classify_method = value.get(data[1])
+            self.classify_function = self.method_classify_all.get(self.classify_method)
             print('updated classify method to %s...' % value.get(data[1]))
             print(data)
 
@@ -677,6 +699,17 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         if start_flag:
             self.flag_save_new = False
+            command_array = np.zeros([1, np.size(self.data, 1)])  # create an empty command array
+            command_array[0, 0] = self.flag_multi_channel
+            command_array[0, 1] = self.flag_classify_method
+            command_array[0, 2] = self.window_class
+            command_array[0, 3] = self.window_overlap
+            command_array[0, 4] = self.sampling_freq
+            command_array[0, 5] = self.extend_stim_orig
+            command_array[0, 6] = self.hp_thresh
+            command_array[0, 7] = self.lp_thresh
+            command_array[0, 8] = self.notch_thresh
+            self.saving_file.save(command_array, "a")  # save the counter and the command
             print('resume saving with a new file...')
             time.sleep(0.1)
 

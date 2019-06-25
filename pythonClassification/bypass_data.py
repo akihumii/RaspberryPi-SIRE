@@ -66,11 +66,9 @@ class BypassData(multiprocessing.Process):
 
                         if self.address.get(data_recv[0]):  # filtering parameters or sampling frequency
                             self.filter_parameters_queue.put(data_recv.astype(int))  # put for changing filter object
-                        else:
-                            self.change_parameter_queue.put(data_recv[:2].astype(int))  # put for changing classification parameters
 
-                        if data_recv[0] == self.address_sampling_frequency:  # put sampling frequency to classification obj as well
-                            self.change_parameter_queue.put(data_recv.astype(int))
+                        self.change_parameter_queue.put(data_recv[:2].astype(int))  # put for changing classification parameters
+
                         # self.change_parameter_event.set()  # flag to notify there's a change of parameters is needed
 
                     if self.stop_event.is_set():
