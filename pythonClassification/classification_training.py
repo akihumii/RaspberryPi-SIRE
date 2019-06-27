@@ -125,13 +125,13 @@ def get_partial_set(features, classes, training_ratio, type_switch):
 def get_training_locs(classes_each, training_ratio, num_bursts_min):
     np.random.shuffle(classes_each)
     # num_item = len(classes_each)
-    return classes_each[0: int(num_bursts_min * training_ratio)]
+    return classes_each[0: int(num_bursts_min * training_ratio)-1]
 
 
 def get_testing_locs(classes_each, training_ratio, num_bursts_min):
     np.random.shuffle(classes_each)
     # num_item = len(classes_each)
-    return classes_each[int(num_bursts_min * training_ratio)+1: num_bursts_min-1]
+    return classes_each[int(num_bursts_min * training_ratio): num_bursts_min-1]
 
 
 if __name__ == "__main__":

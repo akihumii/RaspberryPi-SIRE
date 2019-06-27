@@ -63,9 +63,10 @@ def visualize_features(plot_flag, target_dir):
 
             # plt.scatter(clf.support_vectors_[:, 0], clf.support_vectors_[:, 1], s=80,
             #             facecolors='none', zorder=10, edgecolors='k')
+            num_testing = np.size(features_testing, 0)
             plt.scatter(features_testing[:, 0], features_testing[:, 1], c=classes_testing, zorder=10, cmap=plt.cm.Paired,
                         edgecolors='k')
-
+            plt.legend([str(num_testing)])
             plt.axis('tight')
             x_min = min(features_normalized[:, 0])
             x_max = max(features_normalized[:, 0])
@@ -102,6 +103,7 @@ def visualize_features(plot_flag, target_dir):
 def multiple_prediction(num_repetition, target_dir, plot_flag):
     prediction_all = []
     for i in range(num_repetition):
+        print('processing loop %d:' % i)
         classification_training.train(target_dir)
         prediction = visualize_features(plot_flag, target_dir)
         prediction_all.append(prediction)
@@ -121,9 +123,17 @@ def multiple_prediction(num_repetition, target_dir, plot_flag):
 
 if __name__ == "__main__":
     # target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\visualization'
-    target_dir = 'C:\\Data\\Info\\classificationTmp'
+    # target_dir = 'C:\\Data\\Info\\classificationTmp\\Visualize'
+    # target_dir = 'C:\\Data\\Info\\classificationTmp'
+    target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190626_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\Visualize'
     # target_dir = 'C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized'
-    plot_flag = True
-    num_repeatition = 1
+    plot_flag = False
+    num_repeatition = 1000
     prediction_output = multiple_prediction(num_repeatition, target_dir, plot_flag)
+    print('median: ')
+    print(prediction_output.get('prediction_median'))
+    print('5 perc: ')
+    print(prediction_output.get('prediction_5_perc'))
+    print('95 perc: ')
+    print(prediction_output.get('prediction_95_perc'))
 
