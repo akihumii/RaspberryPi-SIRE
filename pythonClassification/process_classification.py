@@ -11,7 +11,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event):
+    def __init__(self, odin_obj, pins_obj, tcp_ip_com, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, param.method_io, param.pin_led, 'out', param.robot_hand_output)
 
@@ -65,6 +65,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.saving_file = Saving()
 
         self.pin_closed_loop_obj = pins_obj.pin_closed_loop_obj
+
+        self.tcp_ip_com = tcp_ip_com
 
         self.start_stimulation_address = 111
         self.stop_stimulation_address = 222
@@ -156,7 +158,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         while True:
             self.check_change_parameter()
-            if self.pin_sh_obj.input_GPIO():
+
+            if self.pin_sh_obj.input_GPIO():  # hardware setting
                 self.check_saving_flag()
                 self.check_stimulation_flag()
                 self.check_reset_flag()
@@ -693,6 +696,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.flag_save_new = True
             print('stop saving...')
             time.sleep(0.1)
+            filename = self.tcp_ip_com.read([], data_type='text')[0]
+            if filename:
+                print(filename)
 
         if start_flag:
             self.flag_save_new = False
@@ -709,6 +715,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             self.saving_file.save(command_array, "a")  # save the counter and the command
             print('resume saving with a new file...')
             time.sleep(0.1)
+            self.tcp_ip_com.connect()
 
     def _get_window_class_sample_len(self):
         return int(self.window_class * self.sampling_freq)

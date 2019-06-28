@@ -36,13 +36,16 @@ class TcpIp:
                 return []
 
     def connect(self):  # connect to port
-        self.socket_obj.connect((self.ip_add, self.port))
-        print("Successfully connected...")
+        try:
+            self.socket_obj.connect((self.ip_add, self.port))
+            print("Successfully connected...")
+        except socket.timeout:
+            print("Timeout with the connection %s::%d" % (self.ip_add, self.port))
 
     def close(self):
         self.socket_obj.close()
 
-    def read(self, buffer_leftover):  # read data from port
+    def read(self, buffer_leftover, data_type=''):  # read data from port
         num_bytes_recorded = 0
         buffer_read = np.array([], dtype=np.uint8)
         buffer_raw = ''
@@ -51,7 +54,7 @@ class TcpIp:
             try:
                 buffer_part = self.socket_obj.recv(self.buffer_size - num_bytes_recorded)
             except (socket.timeout, IOError), e:
-                if e.errno != errno.EWOULDBLOCK:
+                if e.errno != errno.EWOULDBLOCK and self.socket_obj.gettimeout():
                     print("Data receive timeout...")
                 break
 
@@ -60,7 +63,10 @@ class TcpIp:
                 # sleep(1)
             else:
                 buffer_raw = ''.join([buffer_raw, buffer_part])
-                buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=np.uint8))
+                if data_type == 'text':
+                    buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=str))
+                else:
+                    buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=np.uint8))
 
                 num_bytes_recorded = num_bytes_recorded + len(buffer_part)
 

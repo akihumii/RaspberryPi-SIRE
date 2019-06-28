@@ -15,15 +15,18 @@ from saving import Saving
 PARAM = lambda: 0
 PARAM.ip_sylph = "127.0.0.1"
 PARAM.ip_odin = "192.168.4.1"
+PARAM.ip_com = "192.168.4.5"
 PARAM.ip_gui = "192.168.4.3"
 PARAM.ip_stimulator = ""
 PARAM.port_sylph = 8888
 PARAM.port_odin = 30000
+PARAM.port_com = 7878
 PARAM.port_gui = 8000
 PARAM.port_stimulator = 0
 
 PARAM.buffer_size = 25 * 65  # about 50 ms
 PARAM.buffer_size_sending = 2  # buffer size to send data to socket
+PARAM.buffer_size_filename = 1024  # to receive filename sent from computer
 PARAM.ringbuffer_size = 40960
 PARAM.channel_len = 10
 PARAM.channel_decode = [4, 5, 6, 7]
@@ -147,6 +150,8 @@ if __name__ == "__main__":
             tcp_ip_sylph = TcpIp(PARAM.ip_sylph, PARAM.port_sylph, PARAM.buffer_size)  # create sylph socket object
             tcp_ip_odin = TcpIp(PARAM.ip_odin, PARAM.port_odin, PARAM.buffer_size_sending)  # create odin socket object
             tcp_ip_gui = TcpIp(PARAM.ip_gui, PARAM.port_gui, PARAM.buffer_size_sending)  # create gui socket object
+            tcp_ip_com = TcpIp(PARAM.ip_com, PARAM.port_com, PARAM.buffer_size_filename)  # create socket to receive filename sent from gui
+            # tcp_ip_com.socket_obj.settimeout()
 
             thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, filter_parameters_queue, stop_event)  # send data to GUI in another thread
             thread_bypass_data.start()  # start thread to bypass data to GUI
@@ -163,7 +168,7 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(PARAM)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pins_obj, PARAM, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pins_obj, tcp_ip_com, PARAM, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 
