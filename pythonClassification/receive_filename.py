@@ -3,10 +3,11 @@ import copy
 
 
 class ReceiveFilename(multiprocessing.Process):
-    def __init__(self, tcp_ip_filename, stop_event):
+    def __init__(self, tcp_ip_filename, stop_event, filename_queue):
         multiprocessing.Process.__init__(self)
         self.tcp_ip_filename = tcp_ip_filename
         self.stop_event = stop_event
+        self.filename_queue = filename_queue
 
     def run(self):
         print('started socket server to receive filename...')
@@ -22,9 +23,9 @@ class ReceiveFilename(multiprocessing.Process):
                 print('filename client %s::%d successfully connected...' % (self.tcp_ip_filename.ip_add, self.tcp_ip_filename.port))
 
                 while True:
-                    filename = client_socket_obj.read([],data_type='text')[0]
-                    if filename:
-                        print(filename)
+                    filename = client_socket_obj.read([], data_type='text')[0][0]
+                    if len(filename) > 0:
+                        self.filename_queue.put(filename)
                         break
 
                     if self.stop_event.is_set():

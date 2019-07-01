@@ -146,6 +146,7 @@ if __name__ == "__main__":
             raw_buffer_queue = multiprocessing.Queue()  # saved the raw buffer to send to GUI
             change_parameter_queue = multiprocessing.Queue()  # to save the signal for parameter changing
             filter_parameters_queue = multiprocessing.Queue()  # for thread_bypass_data to store filtering parameters for dataHandler to use
+            filename_queue = multiprocessing.Queue()  # for storing filename
 
             tcp_ip_sylph = TcpIp(PARAM.ip_sylph, PARAM.port_sylph, PARAM.buffer_size)  # create sylph socket object
             tcp_ip_odin = TcpIp(PARAM.ip_odin, PARAM.port_odin, PARAM.buffer_size_sending)  # create odin socket object
@@ -167,11 +168,11 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(PARAM)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pins_obj, PARAM, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pins_obj, PARAM, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 
-            thread_receive_filename = ReceiveFilename(tcp_ip_filename, stop_event)
+            thread_receive_filename = ReceiveFilename(tcp_ip_filename, stop_event, filename_queue)
             thread_receive_filename.start()
 
             # saving_obj = Saving()

@@ -11,7 +11,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event):
+    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, param.method_io, param.pin_led, 'out', param.robot_hand_output)
 
@@ -63,6 +63,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         self.pin_save_obj = pins_obj.pin_save_obj
         self.saving_file = Saving()
+        self.filename_queue = filename_queue
 
         self.pin_closed_loop_obj = pins_obj.pin_closed_loop_obj
 
@@ -156,6 +157,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         while True:
             self.check_change_parameter()
+            self.check_filename()
             if self.pin_sh_obj.input_GPIO():
                 self.check_saving_flag()
                 self.check_stimulation_flag()
@@ -689,7 +691,6 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             start_flag = start_flag and not self.pin_save_obj.input_GPIO()
 
         if stop_flag:  # start a new file to save
-            self.saving_file = Saving()
             self.flag_save_new = True
             print('stop saving...')
             time.sleep(0.1)
@@ -706,9 +707,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             command_array[0, 6] = self.hp_thresh
             command_array[0, 7] = self.lp_thresh
             command_array[0, 8] = self.notch_thresh
+            self.saving_file = Saving()
             self.saving_file.save(command_array, "a")  # save the counter and the command
             print('resume saving with a new file...')
             time.sleep(0.1)
+
+    def check_filename(self):
+        if not self.filename_queue.empty():
+            filename = os.path.join("Data", self.filename_queue.get()) + ".csv"
+            print("saved file %s..." % filename)
+            os.rename(self.saving_file.saving_full_filename, filename)
 
     def _get_window_class_sample_len(self):
         return int(self.window_class * self.sampling_freq)
