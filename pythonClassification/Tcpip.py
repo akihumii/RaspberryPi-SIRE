@@ -42,7 +42,7 @@ class TcpIp:
     def close(self):
         self.socket_obj.close()
 
-    def read(self, buffer_leftover):  # read data from port
+    def read(self, buffer_leftover, data_type=''):  # read data from port
         num_bytes_recorded = 0
         buffer_read = np.array([], dtype=np.uint8)
         buffer_raw = ''
@@ -56,18 +56,22 @@ class TcpIp:
                 break
 
             if not buffer_part:
-                print('Not received anything...')
+                pass
+                # print('Not received anything...')
                 # sleep(1)
             else:
                 buffer_raw = ''.join([buffer_raw, buffer_part])
-                buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=np.uint8))
+                if data_type == 'text':
+                    buffer_read = np.append(buffer_read, buffer_part)
+                else:
+                    buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=np.uint8))
 
                 num_bytes_recorded = num_bytes_recorded + len(buffer_part)
 
             count += 1
 
             if count == 3 and not buffer_part and not buffer_part:
-                print('break receiving now...')
+                # print('break receiving now...')
                 break
 
         return np.append(buffer_leftover, buffer_read), ''.join(buffer_raw)
