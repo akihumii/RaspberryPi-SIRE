@@ -24,7 +24,7 @@ class TcpIp:
             try:
                 while True:
                     self.socket_obj.listen(2)
-                    print('socket listening...')
+                    # print('socket listening...')
                     client_socket, address = self.socket_obj.accept()  # waiting for connection
                     print('Client connected...')
                     sleep(1)
@@ -32,7 +32,7 @@ class TcpIp:
                     return client_socket
 
             except socket.timeout:
-                print('connection time out...')
+                # print('connection time out...')
                 return []
 
     def connect(self):  # connect to port

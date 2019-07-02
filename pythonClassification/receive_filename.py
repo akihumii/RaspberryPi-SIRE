@@ -11,10 +11,10 @@ class ReceiveFilename(multiprocessing.Process):
 
     def run(self):
         print('started socket server to receive filename...')
-        count = 1
+        # count = 1
         while True:
             client_socket = self.tcp_ip_filename.create_host()
-            print('Waiting for filename... %d...' % count)
+            # print('Waiting for filename... %d...' % count)
 
             if client_socket:  # successfully connected
                 client_socket_obj = copy.deepcopy(self.tcp_ip_filename)
@@ -32,9 +32,9 @@ class ReceiveFilename(multiprocessing.Process):
                         break
 
                 client_socket_obj.close()
-                count = 0
+                # count = 0
 
-            count += 1
+            # count += 1
 
             if self.stop_event.is_set():
                 break
