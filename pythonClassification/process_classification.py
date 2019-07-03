@@ -283,9 +283,15 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         command_array[:, 10] = self.odin_obj.frequency
 
         if self.start_stimulation_flag:
-            command_array[:, 1] = self.prediction  # replace the forth column with the current prediction
+            if not self.pin_sh_obj.input_GPIO():  # software command
+                command_array[:, 1] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
+            else:
+                command_array[:, 1] = self.prediction  # replace the forth column with the current prediction
         else:
-            command_array[:, 1] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
+            if not self.pin_sh_obj.input_GPIO():  # software command
+                command_array[:, 1] = self.prediction  # replace the forth column with the current prediction
+            else:
+                command_array[:, 1] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
 
         command_array[:, 2:6] = self.odin_obj.amplitude
         command_array[:, 6:10] = self.odin_obj.pulse_duration
