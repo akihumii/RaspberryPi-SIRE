@@ -117,7 +117,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xDE: self.update_stimulation_flag,
             0xDF: self.update_classify_methods,
             0xE0: self.update_saving_flag,
-            0xE1: self.update_saving_transfer
+            0xE1: self.update_saving_transfer,
+            0xE2: self.update_stimulation_pattern,  # between normal and target on-off
+            0xE3: self.update_stimulation_on_off,  # check which channels control on and off
+            0xE4: self.update_stimulation_target  # check which channels to stimulate
         }
 
         self.stim_threshold_upper = 10
@@ -128,6 +131,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.stim_threshold_power = 10 * np.ones(np.shape(self.channel_decode_default), dtype=np.float)
         self.stim_threshold = [x * 10 ** self.stim_threshold_power[i] for i, x in enumerate(self.stim_threshold_digit)]
 
+        self.stim_on = 1 << 0 | 1 << 1  # set channel 1 and 2 to control on
+        self.stim_target = 0
+        self.stim_target_temp = 0  # to store temporary prediction if no channel is activated
+
         self.start_classify_flag = False
         self.start_stimulation_flag = False
         self.real_channel_enable_flag = False
@@ -136,6 +143,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.flag_save_new = True
         self.flag_closed_loop = False
         self.flag_classify_method = False
+        self.flag_stim_pattern = False  # False for normal stimulation, True for target stimulation
 
     def run(self):
         time.sleep(1)  # wait for other threads to start running
@@ -228,13 +236,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             #     # print(self.odin_obj.amplitude)
             #     return command
             # else:  # single stimulation
-                if self.prediction_changed_flag is not None and any(self.prediction_changed_flag):  # send command when there is a change in prediction
-                    command = self.change_channel_enable()
-                    print(command)
-                    # print(self.odin_obj.amplitude)
-                    return command
-                else:
-                    return [0, 0]
+            if self.prediction_changed_flag is not None and any(self.prediction_changed_flag):  # send command when there is a change in prediction
+                command = self.change_channel_enable()
+                # print(self.odin_obj.amplitude)
+                return command
+            else:
+                return [0, 0]
         else:
             if self.prediction_changed_flag is not None and any(self.prediction_changed_flag):  # send command when there is a change in prediction
                 print('prediction_change_flag:')
@@ -548,8 +555,33 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 print("Error while deleting file: %s" % x)
         print('removed recorded files...')
 
+    def update_stimulation_pattern(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            value = {
+                9: False,
+                10: True
+            }
+            self.flag_stim_pattern = value.get(data[1])
+            print('updated stim pattern flag...')
+            print(data)
+
+    def update_stimulation_on_off(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            self.stim_on = data[1] - 8  # minus 8 to compensate the arbitrary number to form 2 bytes
+            print('updated stim pattern on value...')
+            print(data)
+
+    def update_stimulation_target(self, data):
+        if not self.pin_sh_obj.input_GPIO():
+            self.stim_target = data[1] - 8  # minus 8 to compensate the arbitrary number to form 2 bytes
+            self.change_channel_enable()
+            print('updated stim pattern target value...')
+            print(data)
+
     def change_channel_enable(self):
-        self.odin_obj.channel_enable = self.prediction
+        prediction = self.check_stim_pattern()  # check the stimulation pattern to manipulate the stimulating channels
+
+        self.odin_obj.channel_enable = prediction
         command = self.odin_obj.send_channel_enable()
         print('sending command to odin...')
         print(command)
@@ -717,6 +749,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             filename = os.path.join("Data", self.filename_queue.get()) + ".csv"
             print("saved file %s..." % filename)
             os.rename(self.saving_file.saving_full_filename, filename)
+
+    def check_stim_pattern(self):
+        if self.flag_stim_pattern:  # if stimulation pattern 'Target' is selected
+            if (self.stim_on & self.prediction) > 0:
+                self.stim_target_temp = self.stim_target
+            elif ((self.stim_on ^ 0xF) & self.prediction) > 0:  # ^ operator serves as XOR
+                self.stim_target_temp = 0
+            return self.stim_target_temp
+        else:
+            return self.prediction
 
     def _get_window_class_sample_len(self):
         return int(self.window_class * self.sampling_freq)
