@@ -752,9 +752,14 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def check_filename(self):
         if not self.filename_queue.empty():
-            filename = os.path.join("Data", self.filename_queue.get()) + ".csv"
-            print("saved file %s..." % filename)
-            os.rename(self.saving_file.saving_full_filename, filename)
+            filename = self.filename_queue.get()
+            if filename == 'DISCARDFILE!!!':
+                os.remove(self.saving_file.saving_full_filename)
+                print("removed %s..." + self.saving_file.saving_full_filename)
+            else:
+                filename_full = os.path.join("Data", filename) + ".csv"
+                print("saved file %s..." % filename_full)
+                os.rename(self.saving_file.saving_full_filename, filename_full)
 
     def check_stim_pattern(self):
         if self.flag_stim_pattern:  # if stimulation pattern 'Target' is selected
