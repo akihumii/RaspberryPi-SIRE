@@ -54,13 +54,13 @@ int socket_desc, client_sock, c, read_size, flag = 1, count = 0, read_len, write
 int sync_len = 0, syncIndex = 0;
 
 int recv_count = 0;
-bool is_read_data = 0;
+bool is_read_data = false;
 
 bool is_fr_detected = false;
 uint8_t counter = 0;
 int counter_index = 0;
 
-static int find_sync_pulse(unsigned char* buf, int len){
+int find_sync_pulse(unsigned char* buf, int len){
     int i = 0;
     if(data_stream->getBitMode() == BITMODE_8){
         for(i = 0; i < len-4; i++){
@@ -79,9 +79,8 @@ static int find_sync_pulse(unsigned char* buf, int len){
     return -1;
 }
 
-static void accept_connection(void){
+void accept_connection(){
     client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t *)&c);
-    // fcntl(client_sock, F_SETFL, O_NONBLOCK);
     setsockopt(client_sock, IPPROTO_TCP, TCP_NODELAY, (void *)&flag, sizeof(flag));
 
     if(client_sock<0){
@@ -91,31 +90,13 @@ static void accept_connection(void){
     LOG(INFO) << ", \"event\":\"Accepting:\", \"errnum\":0, \"msg\":\"Socket connected!\"";
 }
 
-static void connect_odin(void){
-    odin_socket = socket(AF_INET , SOCK_STREAM , 0);
-    if(odin_socket < 0){
-        fprintf(stdout, "Failed to create Odin socket\n");
-    }
-    else{
-        fprintf(stdout, "Odin socket created\n");
-    }
-
-    int temp, flag = 1;
-    do{
-        usleep(500000);
-        fprintf(stdout, "Trying to connect to Odin\n");
-        odin_addr.sin_family = AF_INET;
-        odin_addr.sin_port = htons(45454);
-        odin_addr.sin_addr.s_addr = inet_addr("192.168.4.1");
-        temp = connect(odin_socket, (struct sockaddr *)&odin_addr, sizeof(struct sockaddr_in));
-    }while(temp < 0);
-    fprintf(stdout, "Connected to Odin\n");
-
-    // fcntl(odin_socket, F_SETFL, O_NONBLOCK);
-    setsockopt(odin_socket, IPPROTO_TCP, TCP_NODELAY, (void *)&flag, sizeof(flag));
+void close_connection(){
+    close(client_sock);
+    client_sock = -1;
+    delay(1000);
 }
 
-static void wait_for_sylph(void){
+void init_socket_setting(){
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
 
     if(socket_desc == -1){
@@ -127,20 +108,22 @@ static void wait_for_sylph(void){
     server.sin_addr.s_addr = INADDR_ANY;
     server.sin_port = htons(SOCKET_SERVER_PORT);
 
-    binding:
-    if(!bind(socket_desc, (struct sockaddr *)&server, sizeof(server))){
+    c = sizeof(struct sockaddr_in);
+
+    delay(1000);
+    while(!bind(socket_desc, (struct sockaddr *)&server, sizeof(server))){
         LOG(ERROR) << ", \"event\":\"Socket Binding\", \"errnum\":0, \"msg\":\"Socket Binding Error!\"";
-        goto binding;
+        delay(3000);
     }
-
     LOG(INFO) << ", \"event\":\"Socket Binding\", \"errnum\":0, \"msg\":\"Socket Binding Successful!\"";
-
+    
     listen(socket_desc, 99);
 
     LOG(INFO) << ", \"event\":\"Listening:\", \"errnum\":0, \"msg\":\"Waiting for connections...\"";
+}
 
-    c = sizeof(struct sockaddr_in);
-
+void wait_for_sylph(){
+    init_socket_setting();
     accept_connection();
 }
 
@@ -208,8 +191,7 @@ void setup_cmd_settings(){
 void write_cmd(){
     if(buf_cmd[0] == 50){
         fprintf(stdout, "Disconnect signal received!\n");
-        close(client_sock);
-        client_sock = -1;
+        close_connection();
         accept_connection();
     }
     else{
@@ -333,6 +315,7 @@ void *recv_wifi(void *arg){
             is_read_data = false;
             digitalWrite(CMD_GATE_PIN,HIGH);
             usleep(100000);
+            pthread_mutex_unlock(&lock_data);
             pthread_mutex_lock(&lock_data);
             data_stream->setClockTuneMode(false);
             setup_cmd_settings();
