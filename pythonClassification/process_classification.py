@@ -763,7 +763,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if self.prediction in self.stim_pattern_input:
                 return self.stim_pattern_output[self.stim_pattern_input.index(self.prediction)]
             else:
-                return 0
+                return self.odin_obj.channel_enable
         else:
             return self.prediction
 
