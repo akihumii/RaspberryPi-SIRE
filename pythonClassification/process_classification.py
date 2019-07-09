@@ -118,9 +118,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xDF: self.update_classify_methods,
             0xE0: self.update_saving_flag,
             0xE1: self.update_saving_transfer,
-            0xE2: self.update_stimulation_pattern,  # between normal and target on-off
-            0xE3: self.update_stimulation_on_off,  # check which channels control on and off
-            0xE4: self.update_stimulation_target  # check which channels to stimulate
+            0xE2: self.update_stimulation_pattern,
+            0xE3: self.update_stimulation_pattern_flag
         }
 
         self.stim_threshold_upper = 10
@@ -131,9 +130,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.stim_threshold_power = 10 * np.ones(np.shape(self.channel_decode_default), dtype=np.float)
         self.stim_threshold = [x * 10 ** self.stim_threshold_power[i] for i, x in enumerate(self.stim_threshold_digit)]
 
-        self.stim_on = 1 << 0 | 1 << 1  # set channel 1 and 2 to control on
-        self.stim_target = 0
-        self.stim_target_temp = 0  # to store temporary prediction if no channel is activated
+        self.stim_pattern_input = []
+        self.stim_pattern_output = []
+        # self.stim_on = 1 << 0 | 1 << 1  # set channel 1 and 2 to control on
+        # self.stim_target = 0
+        # self.stim_target_temp = 0  # to store temporary prediction if no channel is activated
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
@@ -143,7 +144,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.flag_save_new = True
         self.flag_closed_loop = False
         self.flag_classify_method = False
-        self.flag_stim_pattern = False  # False for normal stimulation, True for target stimulation
+        # self.flag_stim_pattern = False  # False for normal stimulation, True for target stimulation
 
     def run(self):
         time.sleep(1)  # wait for other threads to start running
@@ -563,25 +564,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def update_stimulation_pattern(self, data):
         if not self.pin_sh_obj.input_GPIO():
-            value = {
-                9: False,
-                10: True
-            }
-            self.flag_stim_pattern = value.get(data[1])
-            print('updated stim pattern flag...')
+            temp = data[1] - 520
+            self.stim_pattern_input.append(temp & 0xF)
+            self.stim_pattern_output.append(temp >> 4)
+            print('stim pattern input: ')
+            print(self.stim_pattern_input)
+            print('stim pattern output: ')
+            print(self.stim_pattern_output)
+            print('updated stim pattern...')
             print(data)
 
-    def update_stimulation_on_off(self, data):
+    def update_stimulation_pattern_flag(self, data):
         if not self.pin_sh_obj.input_GPIO():
-            self.stim_on = data[1] - 8  # minus 8 to compensate the arbitrary number to form 2 bytes
-            print('updated stim pattern on value...')
-            print(data)
-
-    def update_stimulation_target(self, data):
-        if not self.pin_sh_obj.input_GPIO():
-            self.stim_target = data[1] - 8  # minus 8 to compensate the arbitrary number to form 2 bytes
-            self.change_channel_enable()
-            print('updated stim pattern target value...')
+            self.stim_pattern_input = []
+            self.stim_pattern_output = []
+            print('cleared stim pattern...')
             print(data)
 
     def change_channel_enable(self):
@@ -762,12 +759,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 os.rename(self.saving_file.saving_full_filename, filename_full)
 
     def check_stim_pattern(self):
-        if self.flag_stim_pattern:  # if stimulation pattern 'Target' is selected
-            if (self.stim_on & self.prediction) > 0:
-                self.stim_target_temp = self.stim_target
-            elif ((self.stim_on ^ 0xF) & self.prediction) > 0:  # ^ operator serves as XOR
-                self.stim_target_temp = 0
-            return self.stim_target_temp
+        if self.stim_pattern_input:  # check if and only if self.stim_pattern is not empty
+            if self.prediction in self.stim_pattern_input:
+                return self.stim_pattern_output[self.stim_pattern_input.index(self.prediction)]
+            else:
+                return 0
         else:
             return self.prediction
 

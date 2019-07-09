@@ -11,3 +11,7 @@ def edit_bit(index, state, value):
         return set_bit(value, index)
     else:
         return clear_bit(value, index)
+
+
+def check_bit(value, index):
+    return value >> index & 1
