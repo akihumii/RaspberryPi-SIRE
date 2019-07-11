@@ -63,6 +63,10 @@ class TcpIp:
                 buffer_raw = ''.join([buffer_raw, buffer_part])
                 if data_type == 'text':
                     buffer_read = np.append(buffer_read, buffer_part)
+                elif data_type == 'double':
+                    dt = np.dtype(np.float32)
+                    dt = dt.newbyteorder('>')
+                    buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=dt))
                 else:
                     buffer_read = np.append(buffer_read, np.frombuffer(buffer_part, dtype=np.uint8))
 
