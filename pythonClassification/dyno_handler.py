@@ -26,11 +26,12 @@ class DynoHandler(multiprocessing.Process):
                 while True:
                     dyno_data = client_socket_obj.read([], data_type='double')[0]
                     if len(dyno_data) > 0:
-                        self.dyno_queue.put(dyno_data)
                         # print(dyno_data)
 
                         if int(dyno_data) == 99999:
                             break
+
+                        self.dyno_queue.put(dyno_data)
 
                     if self.stop_event.is_set():
                         break

@@ -11,7 +11,7 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue):
+    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue, dyno_queue):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, param.method_io, param.pin_led, 'out', param.robot_hand_output)
 
@@ -64,6 +64,9 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.pin_save_obj = pins_obj.pin_save_obj
         self.saving_file = Saving()
         self.filename_queue = filename_queue
+
+        self.dyno_queue = dyno_queue
+        self.dyno_temp = 0
 
         self.pin_closed_loop_obj = pins_obj.pin_closed_loop_obj
 
@@ -263,7 +266,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.prediction = bitwise_operation.edit_bit(i, prediction >> i & 1, self.prediction)  # function of classification_decision
 
     def save_file(self, command_temp):
-        command_array = np.zeros([self.size_temp, 15])  # create an empty command array
+        command_array = np.zeros([self.size_temp, 16])  # create an empty command array
 
         # if command_temp is not None:
         #     command_array[:, 1] = command_temp[1]  # replace the first row & second and third column with [address, value]
@@ -298,6 +301,20 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         if self.classify_method == 'thresholds':
             command_array[:, 11:15] = self.stim_threshold
+
+        if not self.dyno_queue.empty():
+            temp_array = []
+            while True:
+                temp_array.extend(self.dyno_queue.get())
+                if self.dyno_queue.empty():
+                    break
+            temp_locs = range(0, self.size_temp, int(np.ceil(np.float(self.size_temp)/len(temp_array))))
+            for i in range(len(temp_locs)-1):
+                command_array[temp_locs[i]:temp_locs[i+1], 15] = temp_array[i]
+            command_array[temp_locs[-1]:, 15] = temp_array[-1]
+            self.dyno_temp = temp_array[-1]
+        else:
+            command_array[:, 15] = self.dyno_temp
 
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 

@@ -173,7 +173,7 @@ if __name__ == "__main__":
 
             data_obj = DataHandler(PARAM)  # create data class
 
-            thread_process_classification = ProcessClassification(odin_obj, pins_obj, PARAM, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue)  # thread 2: filter, extract features, classify
+            thread_process_classification = ProcessClassification(odin_obj, pins_obj, PARAM, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue, dyno_queue)  # thread 2: filter, extract features, classify
             thread_process_classification.start()  # start thread 2: online classification
             buffer_leftover = []
 
