@@ -11,11 +11,13 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue):
+    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue, num_class_value):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, param.method_io, param.pin_led, 'out', param.robot_hand_output)
 
         self.clf = None
+        self.num_class = 0
+        self.num_class_value = num_class_value
         self.sampling_freq = param.sampling_freq
         self.hp_thresh = 0
         self.lp_thresh = 0
@@ -306,18 +308,20 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def load_classifier(self):
         if self.flag_multi_channel:  # multi-channel classification
-            filename = sorted(x for x in os.listdir('classificationTmp') if x.endswith('Cha.sav'))
+            filename = sorted(x for x in os.listdir('classificationTmp') if 'Cha' in x)
             # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
+            self.num_class = filename[13]
             self.num_channel = self.odin_obj.num_channel
             self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
-            file_norms = [x for x in os.listdir('classificationTmp') if x.endswith('Cha.csv')]
+            file_norms = [x for x in os.listdir('classificationTmp') if 'Cha' in x]
             self.norms = np.genfromtxt(os.path.join('classificationTmp', file_norms[0]), delimiter=',')
         else:  # single-channel classification
-            filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
-            self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
+            filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and 'Cha' not in x)
+            self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier
+            self.num_class = len(filename)
             self.num_channel = len(self.channel_decode)
             self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
-            file_norms = [x for x in os.listdir('classificationTmp') if x.startswith('normsCh') and not x.endswith('Cha.csv')]
+            file_norms = [x for x in os.listdir('classificationTmp') if x.startswith('normsCh') and 'Cha' not in x]
             self.norms = [np.genfromtxt(os.path.join('classificationTmp', x), delimiter=',') for x in file_norms]
         self.extend_stim = self.extend_stim_orig * np.ones(self.num_channel)
         self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
@@ -753,6 +757,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if filename == 'DISCARDFILE!!!':
                 os.remove(self.saving_file.saving_full_filename)
                 print("removed %s..." + self.saving_file.saving_full_filename)
+            elif filename == 'GIMMENUMCLASS!!!':
+                self.num_class_value.value = self.num_class
             else:
                 filename_full = os.path.join("Data", filename) + ".csv"
                 print("saved file %s..." % filename_full)

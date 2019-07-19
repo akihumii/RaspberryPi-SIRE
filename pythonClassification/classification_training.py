@@ -35,9 +35,9 @@ def train_full(file_feature, file_class):
         file_base = os.path.basename(file_feature)
 
         # saving classifiers and norms
-        i_ch = 10  # index of channel number
-        file_classifier = 'classifierCh%s.sav' % file_base[i_ch]
-        file_norms = 'normsCh%s.csv' % file_base[i_ch]
+        i_ch = [10, 12]  # index of channel number
+        file_classifier = 'classifierCh%s.sav' % file_base[i_ch[0]:i_ch[1]]
+        file_norms = 'normsCh%s.csv' % file_base[i_ch[0]:i_ch[1]]
         # file_norms = 'normsCh%s.sav' % file_feature[i][file_feature[i].find('Ch')+2]
 
         pickle.dump(classifiers, open(os.path.join(file_dir, file_classifier), 'wb'))
