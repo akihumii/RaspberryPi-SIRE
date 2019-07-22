@@ -247,8 +247,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 return [0, 0]
         else:
             if self.prediction_changed_flag is not None and any(self.prediction_changed_flag):  # send command when there is a change in prediction
-                print('prediction_change_flag:')
-                print(self.prediction_changed_flag)
+                # print('prediction_change_flag:')
+                # print(self.prediction_changed_flag)
                 print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
             else:
                 return [0, 0]
@@ -308,12 +308,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def load_classifier(self):
         if self.flag_multi_channel:  # multi-channel classification
-            filename = sorted(x for x in os.listdir('classificationTmp') if 'Cha' in x)
+            filename = sorted(x for x in os.listdir('classificationTmp') if 'classifierCha' in x)
             # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
-            self.num_class = filename[13]
+            self.num_class = int(filename[0][13])
             self.num_channel = self.odin_obj.num_channel
             self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
-            file_norms = [x for x in os.listdir('classificationTmp') if 'Cha' in x]
+            file_norms = [x for x in os.listdir('classificationTmp') if 'normsCha' in x]
             self.norms = np.genfromtxt(os.path.join('classificationTmp', file_norms[0]), delimiter=',')
         else:  # single-channel classification
             filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and 'Cha' not in x)
@@ -758,6 +758,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 os.remove(self.saving_file.saving_full_filename)
                 print("removed %s..." + self.saving_file.saving_full_filename)
             elif filename == 'GIMMENUMCLASS!!!':
+                self.load_classifier()
                 self.num_class_value.value = self.num_class
             else:
                 filename_full = os.path.join("Data", filename) + ".csv"
