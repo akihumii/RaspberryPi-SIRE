@@ -27,7 +27,9 @@ class BypassData(multiprocessing.Process):
             0xD7: True,  # highpass cutoff freq
             0xD8: True,  # lowpass cutoff freq
             0xD9: True,  # notch cutoff freq
-            0xDA: True
+            0xDA: True,  # extend stimulation
+            0xE2: True,  # stimulation pattern
+            0xE3: True  # stimulation pattern flag
         }
 
         self.address_sampling_frequency = 0xD6

@@ -11,11 +11,13 @@ from features import Features
 
 
 class ProcessClassification(multiprocessing.Process, ClassificationDecision):
-    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue):
+    def __init__(self, odin_obj, pins_obj, param, ring_event, ring_queue, change_parameter_queue, change_parameter_event, stop_event, filename_queue, num_class_value):
         multiprocessing.Process.__init__(self)
         ClassificationDecision.__init__(self, param.method_io, param.pin_led, 'out', param.robot_hand_output)
 
         self.clf = None
+        self.num_class = 0
+        self.num_class_value = num_class_value
         self.sampling_freq = param.sampling_freq
         self.hp_thresh = 0
         self.lp_thresh = 0
@@ -118,9 +120,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             0xDF: self.update_classify_methods,
             0xE0: self.update_saving_flag,
             0xE1: self.update_saving_transfer,
-            0xE2: self.update_stimulation_pattern,  # between normal and target on-off
-            0xE3: self.update_stimulation_on_off,  # check which channels control on and off
-            0xE4: self.update_stimulation_target  # check which channels to stimulate
+            0xE2: self.update_stimulation_pattern,
+            0xE3: self.update_stimulation_pattern_flag
         }
 
         self.stim_threshold_upper = 10
@@ -131,9 +132,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.stim_threshold_power = 10 * np.ones(np.shape(self.channel_decode_default), dtype=np.float)
         self.stim_threshold = [x * 10 ** self.stim_threshold_power[i] for i, x in enumerate(self.stim_threshold_digit)]
 
-        self.stim_on = 1 << 0 | 1 << 1  # set channel 1 and 2 to control on
-        self.stim_target = 0
-        self.stim_target_temp = 0  # to store temporary prediction if no channel is activated
+        self.stim_pattern_input = []
+        self.stim_pattern_output = []
+        # self.stim_on = 1 << 0 | 1 << 1  # set channel 1 and 2 to control on
+        # self.stim_target = 0
+        # self.stim_target_temp = 0  # to store temporary prediction if no channel is activated
 
         self.start_classify_flag = False
         self.start_stimulation_flag = False
@@ -143,7 +146,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.flag_save_new = True
         self.flag_closed_loop = False
         self.flag_classify_method = False
-        self.flag_stim_pattern = False  # False for normal stimulation, True for target stimulation
+        # self.flag_stim_pattern = False  # False for normal stimulation, True for target stimulation
 
     def run(self):
         time.sleep(1)  # wait for other threads to start running
@@ -244,8 +247,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 return [0, 0]
         else:
             if self.prediction_changed_flag is not None and any(self.prediction_changed_flag):  # send command when there is a change in prediction
-                print('prediction_change_flag:')
-                print(self.prediction_changed_flag)
+                # print('prediction_change_flag:')
+                # print(self.prediction_changed_flag)
                 print('Prediction: %s' % format(self.prediction, 'b'))  # print new prediction
             else:
                 return [0, 0]
@@ -305,18 +308,20 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def load_classifier(self):
         if self.flag_multi_channel:  # multi-channel classification
-            filename = sorted(x for x in os.listdir('classificationTmp') if x.endswith('Cha.sav'))
+            filename = sorted(x for x in os.listdir('classificationTmp') if 'classifierCha' in x)
             # self.channel_decode = [x[x.find('Ch') + 2] for x in filename]
+            self.num_class = int(filename[0][13])
             self.num_channel = self.odin_obj.num_channel
             self.clf = pickle.load(open(os.path.join('classificationTmp', filename[0]), 'rb'))  # there should only be one classifier file
-            file_norms = [x for x in os.listdir('classificationTmp') if x.endswith('Cha.csv')]
+            file_norms = [x for x in os.listdir('classificationTmp') if 'normsCha' in x]
             self.norms = np.genfromtxt(os.path.join('classificationTmp', file_norms[0]), delimiter=',')
         else:  # single-channel classification
-            filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and not x.endswith('Cha.sav'))
-            self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier files
+            filename = sorted(x for x in os.listdir('classificationTmp') if x.startswith('classifier') and 'Cha' not in x)
+            self.channel_decode = [x[x.find('Ch') + 2] for x in filename]  # there should be multiple classifier
+            self.num_class = len(filename)
             self.num_channel = len(self.channel_decode)
             self.clf = [pickle.load(open(os.path.join('classificationTmp', x), 'rb')) for x in filename]
-            file_norms = [x for x in os.listdir('classificationTmp') if x.startswith('normsCh') and not x.endswith('Cha.csv')]
+            file_norms = [x for x in os.listdir('classificationTmp') if x.startswith('normsCh') and 'Cha' not in x]
             self.norms = [np.genfromtxt(os.path.join('classificationTmp', x), delimiter=',') for x in file_norms]
         self.extend_stim = self.extend_stim_orig * np.ones(self.num_channel)
         self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
@@ -563,25 +568,21 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def update_stimulation_pattern(self, data):
         if not self.pin_sh_obj.input_GPIO():
-            value = {
-                9: False,
-                10: True
-            }
-            self.flag_stim_pattern = value.get(data[1])
-            print('updated stim pattern flag...')
+            temp = data[1] - 520
+            self.stim_pattern_input.append(temp & 0xF)
+            self.stim_pattern_output.append(temp >> 4)
+            print('stim pattern input: ')
+            print(self.stim_pattern_input)
+            print('stim pattern output: ')
+            print(self.stim_pattern_output)
+            print('updated stim pattern...')
             print(data)
 
-    def update_stimulation_on_off(self, data):
+    def update_stimulation_pattern_flag(self, data):
         if not self.pin_sh_obj.input_GPIO():
-            self.stim_on = data[1] - 8  # minus 8 to compensate the arbitrary number to form 2 bytes
-            print('updated stim pattern on value...')
-            print(data)
-
-    def update_stimulation_target(self, data):
-        if not self.pin_sh_obj.input_GPIO():
-            self.stim_target = data[1] - 8  # minus 8 to compensate the arbitrary number to form 2 bytes
-            self.change_channel_enable()
-            print('updated stim pattern target value...')
+            self.stim_pattern_input = []
+            self.stim_pattern_output = []
+            print('cleared stim pattern...')
             print(data)
 
     def change_channel_enable(self):
@@ -756,18 +757,20 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if filename == 'DISCARDFILE!!!':
                 os.remove(self.saving_file.saving_full_filename)
                 print("removed %s..." + self.saving_file.saving_full_filename)
+            elif filename == 'GIMMENUMCLASS!!!':
+                self.load_classifier()
+                self.num_class_value.value = self.num_class
             else:
                 filename_full = os.path.join("Data", filename) + ".csv"
                 print("saved file %s..." % filename_full)
                 os.rename(self.saving_file.saving_full_filename, filename_full)
 
     def check_stim_pattern(self):
-        if self.flag_stim_pattern:  # if stimulation pattern 'Target' is selected
-            if (self.stim_on & self.prediction) > 0:
-                self.stim_target_temp = self.stim_target
-            elif ((self.stim_on ^ 0xF) & self.prediction) > 0:  # ^ operator serves as XOR
-                self.stim_target_temp = 0
-            return self.stim_target_temp
+        if self.stim_pattern_input:  # check if and only if self.stim_pattern is not empty
+            if self.prediction in self.stim_pattern_input:
+                return self.stim_pattern_output[self.stim_pattern_input.index(self.prediction)]
+            else:
+                return self.odin_obj.channel_enable
         else:
             return self.prediction
 
