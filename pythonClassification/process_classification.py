@@ -150,6 +150,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.flag_save_new = True
         self.flag_closed_loop = False
         self.flag_classify_method = False
+        self.flag_save_input_output = False
         # self.flag_stim_pattern = False  # False for normal stimulation, True for target stimulation
 
     def run(self):
@@ -270,7 +271,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.prediction = bitwise_operation.edit_bit(i, prediction >> i & 1, self.prediction)  # function of classification_decision
 
     def save_file(self, command_temp):
-        command_array = np.zeros([self.size_temp, 16])  # create an empty command array
+        command_array = np.zeros([self.size_temp, 18])  # create an empty command array
 
         # if command_temp is not None:
         #     command_array[:, 1] = command_temp[1]  # replace the first row & second and third column with [address, value]
@@ -306,6 +307,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         if self.classify_method == 'thresholds':
             command_array[:, 11:15] = self.stim_threshold
 
+        if self.flag_save_input_output:
+            command_array[0, 15] = self.flag_multi_channel + 1000
+            if self.stim_pattern_input:
+                command_array[1:len(self.stim_pattern_input)+1, 15] = self.stim_pattern_input
+                command_array[1:len(self.stim_pattern_output)+1, 16] = self.stim_pattern_output
+            self.flag_save_input_output = False
+            
         if not self.dyno_queue.empty():
             temp_array = []
             while True:
@@ -318,7 +326,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             command_array[temp_locs[-1]:, 15] = temp_array[-1]
             self.dyno_temp = temp_array[-1]
         else:
-            command_array[:, 15] = self.dyno_temp
+            command_array[:, 17] = self.dyno_temp
 
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
@@ -595,6 +603,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             print(self.stim_pattern_output)
             print('updated stim pattern...')
             print(data)
+            self.flag_save_input_output = True  # save pattern in saving file
 
     def update_stimulation_pattern_flag(self, data):
         if not self.pin_sh_obj.input_GPIO():
@@ -766,6 +775,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             command_array[0, 8] = self.notch_thresh
             self.saving_file = Saving()
             self.saving_file.save(command_array, "a")  # save the counter and the command
+            self.flag_save_input_output = True
             print('resume saving with a new file...')
             time.sleep(0.1)
 
