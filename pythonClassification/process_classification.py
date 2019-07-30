@@ -5,6 +5,7 @@ import pickle
 import time
 import bitwise_operation
 import glob
+import classification_testing
 from saving import Saving
 from classification_decision import ClassificationDecision
 from features import Features
@@ -356,7 +357,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
     def classify_features(self, channel_i, data):
         if channel_i == 'all':  # for the case of multi-channel decoding
-            features = np.array([self.extract_features(data[:, i]) for i in range(len(self.channel_decode_default))])
+            features = np.array([classification_testing.extract_features(data[:, i], self.sampling_freq, self.features_id)
+                                 for i in range(len(self.channel_decode_default))])
             features = np.hstack(np.transpose(np.vstack(features)))  # reconstruct into correct structure
             features = features / self.norms
             prediction = self.clf.predict([features]) - 1
@@ -380,10 +382,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             prediction = any(prediction)
         return int(prediction)
 
-    def extract_features(self, data):
-        feature_obj = Features(data, self.sampling_freq, self.features_id)
-        features = feature_obj.extract_features()
-        return features
+    # def extract_features(self, data):
+    #     feature_obj = Features(data, self.sampling_freq, self.features_id)
+    #     features = feature_obj.extract_features()
+    #     return features
 
     def update_on_off(self, data):
         if data[0] == 0xF8:
