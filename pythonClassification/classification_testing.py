@@ -2,6 +2,8 @@ import numpy as np
 import pickle
 from features import Features
 import matplotlib.pyplot as plt
+from Tkinter import Tk
+from tkinter.filedialog import asksaveasfilename
 
 
 def extract_features(data, sampling_freq, features_id):
@@ -30,6 +32,17 @@ def get_prediction_all(clf, features, overlapping_size_sample_unit, length_data)
     return output
 
 
+def get_filename():
+    Tk().withdraw()
+    return asksaveasfilename(title="Save as", filetypes=(("csv files", "*.csv"), ("all files", "*.*")))
+
+
+def save_data(filename_save, data):
+    f = open(filename_save, mode='w')
+    f.writelines(data)
+    f.close()
+
+
 sampling_freq = 1250
 features_id = [5, 8]
 channel = range(3, 7)
@@ -38,9 +51,9 @@ window_size_sample_unit = int(window_size * sampling_freq)
 overlapping_size = 0.05  # seconds
 overlapping_size_sample_unit = int(overlapping_size * sampling_freq)
 
-filename = 'F:\\Derek_Desktop_Backup\\Marshal\\20190705_Chronic_NHP_wireless_implant_Alvin\\improvedClassifier\\biceps_multi_1_20190705.csv'
-filename = 'F:\\Derek_Desktop_Backup\\Marshal\\20190705_Chronic_NHP_wireless_implant_Alvin\\improvedClassifier\\tricpes_multi_merged_20190705.csv'
-filename = 'F:\\Derek_Desktop_Backup\\Marshal\\20190705_Chronic_NHP_wireless_implant_Alvin\\improvedClassifier\\baseline_20190626.csv'
+# filename = 'F:\\Derek_Desktop_Backup\\Marshal\\20190705_Chronic_NHP_wireless_implant_Alvin\\improvedClassifier\\biceps_multi_1_20190705.csv'
+# filename = 'F:\\Derek_Desktop_Backup\\Marshal\\20190705_Chronic_NHP_wireless_implant_Alvin\\improvedClassifier\\tricpes_multi_merged_20190705.csv'
+# filename = 'F:\\Derek_Desktop_Backup\\Marshal\\20190705_Chronic_NHP_wireless_implant_Alvin\\improvedClassifier\\baseline_20190626.csv'
 filename = 'F:\\Derek_Desktop_Backup\\Marshal\\20190705_Chronic_NHP_wireless_implant_Alvin\\20190705_data_all.csv'
 
 # filename_clf = 'F:\\Derek_Desktop_Backup\\Marshal\\20190705_Chronic_NHP_wireless_implant_Alvin\\improvedClassifier\\Info\\classificationTmp\\classifierCha3.sav'
@@ -66,6 +79,10 @@ prediction[prediction < 0] = 0
 
 plt.plot(prediction)
 plt.show()
+
+filename_prediction = get_filename() + ".csv"
+
+save_data(filename_prediction, [str(x)+'\n' for x in prediction])
 
 
 
