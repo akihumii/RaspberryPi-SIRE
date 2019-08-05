@@ -40,7 +40,7 @@ def train_full(file_feature, file_class):
         file_norms = 'normsCh%s.csv' % file_base[i_ch[0]:i_ch[1]]
         # file_norms = 'normsCh%s.sav' % file_feature[i][file_feature[i].find('Ch')+2]
 
-        pickle.dump(classifiers, open(os.path.join(file_dir, file_classifier), 'wb'))
+        pickle.dump(classifiers, open(os.path.join(file_dir, file_classifier), 'wb'), protocol=2)
         np.savetxt(os.path.join(file_dir, file_norms), norms, delimiter=',')
         # pickle.dump(norms, open(os.path.join(target_dir, file_norms), 'wb'))
 
@@ -93,7 +93,7 @@ def train(target_dir):
             filename_norms = 'normsCh%s.csv' % file_feature[i][file_feature[i].find('Ch') + 2]
             # filename_norms = 'normsCh%s.sav' % file_feature[i][file_feature[i].find('Ch')+2]
 
-            pickle.dump(classifiers, open(os.path.join(target_dir, filename), 'wb'))
+            pickle.dump(classifiers, open(os.path.join(target_dir, filename), 'wb'), protocol=2)
             np.savetxt(os.path.join(target_dir, filename_norms), norms, delimiter=',')
             # pickle.dump(norms, open(os.path.join(target_dir, filename_norms), 'wb'))
 

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pickle
 import os
 import classification_training
+from classification_testing import get_open_filename
 
 
 def predict_features(clf, features, classes=[]):
