@@ -142,8 +142,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         # self.stim_target = 0
         # self.stim_target_temp = 0  # to store temporary prediction if no channel is activated
 
-        self.start_classify_flag = False
         self.start_stimulation_flag = False
+        self.start_integration_flag = False
         self.real_channel_enable_flag = False
         self.flag_multi_channel = False
         self.flag_reset = False
@@ -236,7 +236,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 if x:  # if prediction changes
                     self.prediction = self.output(i, prediction >> i & 1, self.prediction)  # function of classification_decision
 
-        if self.start_stimulation_flag:  # send command to odin if the pin is pulled to high
+        if self.start_integration_flag:  # send command to odin if the pin is pulled to high
             # if self.flag_closed_loop:  # closed-loop stimulation
             #     command = self.odin_obj.send_step_size_increase()
             #     print('sending command to odin...')
@@ -271,7 +271,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.prediction = bitwise_operation.edit_bit(i, prediction >> i & 1, self.prediction)  # function of classification_decision
 
     def save_file(self, command_temp):
-        command_array = np.zeros([self.size_temp, 18])  # create an empty command array
+        command_array = np.zeros([self.size_temp, 19])  # create an empty command array
 
         # if command_temp is not None:
         #     command_array[:, 1] = command_temp[1]  # replace the first row & second and third column with [address, value]
@@ -290,28 +290,28 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         # command_array[:, 0] = self.prediction
         command_array[:, 10] = self.odin_obj.frequency
 
-        if self.start_stimulation_flag:
-            if not self.pin_sh_obj.input_GPIO():  # software command
-                command_array[:, 1] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
-            else:
-                command_array[:, 1] = self.prediction  # replace the forth column with the current prediction
-        else:
-            if not self.pin_sh_obj.input_GPIO():  # software command
-                command_array[:, 1] = self.prediction  # replace the forth column with the current prediction
-            else:
-                command_array[:, 1] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
+        # if self.start_integration_flag:
+        #     if not self.pin_sh_obj.input_GPIO():  # software command
+        command_array[:, 1] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
+            # else:
+        command_array[:, 2] = self.prediction  # replace the forth column with the current prediction
+        # else:
+        #     if not self.pin_sh_obj.input_GPIO():  # software command
+        #         command_array[:, 1] = self.prediction  # replace the forth column with the current prediction
+        #     else:
+        #         command_array[:, 1] = self.odin_obj.channel_enable  # replace the forth column with odin channel enable
 
-        command_array[:, 2:6] = self.odin_obj.amplitude
-        command_array[:, 6:10] = self.odin_obj.pulse_duration
+        command_array[:, 3:7] = self.odin_obj.amplitude
+        command_array[:, 7:11] = self.odin_obj.pulse_duration
 
         if self.classify_method == 'thresholds':
-            command_array[:, 11:15] = self.stim_threshold
+            command_array[:, 12:16] = self.stim_threshold
 
         if self.flag_save_input_output:
-            command_array[0, 15] = self.flag_multi_channel + 1000
+            command_array[0, 16] = self.flag_multi_channel + 1000
             if self.stim_pattern_input:
-                command_array[1:len(self.stim_pattern_input)+1, 15] = self.stim_pattern_input
-                command_array[1:len(self.stim_pattern_output)+1, 16] = self.stim_pattern_output
+                command_array[1:len(self.stim_pattern_input)+1, 16] = self.stim_pattern_input
+                command_array[1:len(self.stim_pattern_output)+1, 17] = self.stim_pattern_output
             self.flag_save_input_output = False
             
         if not self.dyno_queue.empty():
@@ -322,11 +322,11 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     break
             temp_locs = range(0, self.size_temp, int(np.ceil(np.float(self.size_temp)/len(temp_array))))
             for i in range(len(temp_locs)-1):
-                command_array[temp_locs[i]:temp_locs[i+1], 15] = temp_array[i]
-            command_array[temp_locs[-1]:, 15] = temp_array[-1]
+                command_array[temp_locs[i]:temp_locs[i+1], 16] = temp_array[i]
+            command_array[temp_locs[-1]:, 16] = temp_array[-1]
             self.dyno_temp = temp_array[-1]
         else:
-            command_array[:, 17] = self.dyno_temp
+            command_array[:, 18] = self.dyno_temp
 
         # counter = np.vstack(self.data[:, 11])  # get the vertical matrix of counter
 
@@ -353,6 +353,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.extend_stim_flag = np.zeros(self.num_channel, dtype=bool)
         print('loaded classifier...')
         print(filename)
+
+    def extract_features(self, data):
+        feature_obj = Features(data, self.sampling_freq, self.features_id)
+        return feature_obj.extract_features()
 
     def classify_features(self, channel_i, data):
         if channel_i == 'all':  # for the case of multi-channel decoding
@@ -397,8 +401,10 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         print(data)
 
     def update_channel_enable(self, data):
-        self.prediction = data[1]
-        self.change_channel_enable()
+        self.odin_obj.channel_enable = data[1]
+        command = self.odin_obj.send_channel_enable()
+        print('sending command to odin...')
+        print(command)
         print('updated channel enable...')
         print(data)
         # time.sleep(0.04)
@@ -567,7 +573,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 8: True,
                 9: False
             }
-            self.start_stimulation_flag = value.get(data[1])
+            self.start_integration_flag = value.get(data[1])
             self.check_stimulation_flag()
             print('updated stimulation flag...')
             print(data)
@@ -728,22 +734,22 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             time.sleep(0.1)
 
     def check_stimulation_flag(self):
-        start_flag = not self.start_stimulation_flag
-        stop_flag = self.start_stimulation_flag
+        start_flag = not self.start_integration_flag
+        stop_flag = self.start_integration_flag
         if self.pin_sh_obj.input_GPIO():  # hardware
             start_flag = start_flag and self.pin_stim_obj.input_GPIO()
             stop_flag = stop_flag and not self.pin_stim_obj.input_GPIO()
 
         if start_flag:  # send starting sequence to stimulator
             print('started stimulation...')
-            self.start_stimulation_flag = True  # start the stimulation
+            self.start_integration_flag = True  # start the stimulation
             self.start_stimulation_initial = True  # to insert initial flag in saved file
             self.odin_obj.send_start_sequence()  # send start bit to odin
             self.change_channel_enable()  # send a channel enable that is the current prediction
 
         if stop_flag:  # send ending sequence to setimulator
             print('stopped stimulation...')
-            self.start_stimulation_flag = False
+            self.start_integration_flag = False
             self.stop_stimulation_initial = True
             amp_temp = self.odin_obj.amplitude
             self.odin_obj.send_stop_sequence()  # send stop bit to odin
