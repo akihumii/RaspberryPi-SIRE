@@ -96,8 +96,9 @@ def hide_class(features_normalized, classes, target_class):
 
 
 def get_data_TSNE(features_normalized, classes):
+    print('computing TSNE...')
     features_embedded = TSNE(init='random', random_state=0, perplexity=30).fit_transform(features_normalized)
-    label_all = ["baseline", "biceps", "triceps", "co-concentrate"]
+    label_all = ["baseline", "biceps", "triceps", "co-contraction"]
     label = np.vstack([label_all[int(x) - 1] for x in classes])
     features_result = np.hstack([features_embedded, np.vstack(classes.astype(int))])
     features_result = pd.DataFrame(data=features_result, columns=['DIM1', 'DIM2', 'classes'])
@@ -179,13 +180,16 @@ if __name__ == "__main__":
     # target_dir = 'C:\\Data\\Info\\classificationTmp\\Visualize'
     # target_dir = 'C:\\Data\\Info\\classificationTmp'
     # target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190626_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\Visualize'
-    target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\classifierImrpovement\\Info_20190802data_settings_60_30\\classificationTmp'
+    # target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\classifierImrpovement\\Info_20190802data_settings_60_30\\classificationTmp'
+    # target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\classifierImrpovement\\Info_20190802_old_model\\classificationTmp'
+    # target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\classifierImrpovement\\Info_20190802_old_model\\classificationTmp'
+    target_dir = 'F:\\Derek_Desktop_Backup\\Marshal\\20190808_Chronic_NHP_Alvin\\testing\\Info\\classificationTmp'
     # target_dir = 'C:\\Users\\lsitsai\\Desktop\\Marshal\\20190131_Chronic_NHP_wireless_implant_Alvin\\Info\\classificationTmp\\storage\\normalized'
     plot_flag = True
     # flag_single_channel = True
     flag_single_channel = False
-    # flag_hide_coconcentrate = True
-    flag_hide_coconcentrate = False
+    flag_hide_coconcentrate = True
+    # flag_hide_coconcentrate = False
     num_repeatition = 1
     prediction_output = multiple_prediction(num_repeatition, target_dir, plot_flag, flag_single_channel)
     print('median: ')
