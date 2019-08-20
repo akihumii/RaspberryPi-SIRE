@@ -359,30 +359,36 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         return feature_obj.extract_features()
 
     def classify_features(self, channel_i, data):
-        if channel_i == 'all':  # for the case of multi-channel decoding
-            features = np.array([self.extract_features(data[:, i]) for i in range(len(self.channel_decode_default))])
-            features = np.hstack(np.transpose(np.vstack(features)))  # reconstruct into correct structure
-            features = features / self.norms
-            prediction = self.clf.predict([features]) - 1
+        if not np.isnan(data).any() and not np.isinf(data).any():
+            if channel_i == 'all':  # for the case of multi-channel decoding
+                features = np.array([self.extract_features(data[:, i]) for i in range(len(self.channel_decode_default))])
+                features = np.hstack(np.transpose(np.vstack(features)))  # reconstruct into correct structure
+                features = features / self.norms
+                prediction = self.clf.predict([features]) - 1
+            else:
+                features = self.extract_features(data)
+                features = features / self.norms[channel_i]
+                prediction = self.clf[channel_i].predict([features]) - 1
+            return int(prediction)
         else:
-            features = self.extract_features(data)
-            features = features / self.norms[channel_i]
-            prediction = self.clf[channel_i].predict([features]) - 1
-        return int(prediction)
+            return 0
 
     def classify_thresholds(self, channel_i, data):
-        if channel_i == 'all':  # for the case of multi-channel decoding
-            prediction = False
-            channel_len = len(self.channel_decode_default)
-            for i in range(channel_len):
-                prediction = any(data[:, i] > self.stim_threshold[i])
-                if prediction:
-                    prediction = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 3    # enable all channels
-                    break
+        if not np.isnan(data).any() and not np.isinf(data).any():
+            if channel_i == 'all':  # for the case of multi-channel decoding
+                prediction = False
+                channel_len = len(self.channel_decode_default)
+                for i in range(channel_len):
+                    prediction = any(data[:, i] > self.stim_threshold[i])
+                    if prediction:
+                        prediction = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 3    # enable all channels
+                        break
+            else:
+                prediction = data >= self.stim_threshold[channel_i]
+                prediction = any(prediction)
+            return int(prediction)
         else:
-            prediction = data >= self.stim_threshold[channel_i]
-            prediction = any(prediction)
-        return int(prediction)
+            return 0
 
     def extract_features(self, data):
         feature_obj = Features(data, self.sampling_freq, self.features_id)
