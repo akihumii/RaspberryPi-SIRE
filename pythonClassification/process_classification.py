@@ -76,6 +76,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.start_stimulation_address = 111
         self.stop_stimulation_address = 222
         self.real_channel_enable_address = 100
+        self.real_channel_disable_address = 200
         self.start_stimulation_initial = False
         self.stop_stimulation_initial = False
 
@@ -145,6 +146,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.start_stimulation_flag = False
         self.start_integration_flag = False
         self.real_channel_enable_flag = False
+        self.real_channel_disable_flag = False
         self.flag_multi_channel = False
         self.flag_reset = False
         self.flag_save_new = True
@@ -286,9 +288,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             command_array[0, 0] = self.real_channel_enable_address
             self.real_channel_enable_flag = False
 
+        if self.real_channel_disable_flag:
+            command_array[0, 0] = self.real_channel_disable_address
+            self.real_channel_disable_flag = False
+
         # if any(self.prediction_changed_flag):
         # command_array[:, 0] = self.prediction
-        command_array[:, 10] = self.odin_obj.frequency
 
         # if self.start_integration_flag:
         #     if not self.pin_sh_obj.input_GPIO():  # software command
@@ -304,6 +309,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         command_array[:, 3:7] = self.odin_obj.amplitude
         command_array[:, 7:11] = self.odin_obj.pulse_duration
 
+        command_array[:, 11] = self.odin_obj.frequency
         if self.classify_method == 'thresholds':
             command_array[:, 12:16] = self.stim_threshold
 
@@ -322,8 +328,8 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                     break
             temp_locs = range(0, self.size_temp, int(np.ceil(np.float(self.size_temp)/len(temp_array))))
             for i in range(len(temp_locs)-1):
-                command_array[temp_locs[i]:temp_locs[i+1], 16] = temp_array[i]
-            command_array[temp_locs[-1]:, 16] = temp_array[-1]
+                command_array[temp_locs[i]:temp_locs[i+1], 18] = temp_array[i]
+            command_array[temp_locs[-1]:, 18] = temp_array[-1]
             self.dyno_temp = temp_array[-1]
         else:
             command_array[:, 18] = self.dyno_temp
@@ -397,6 +403,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 self.real_channel_enable_flag = True
         elif data[0] == 0x8F:
             self.odin_obj.send_stop()
+            self.real_channel_disable_flag = True
         print('updated on/off status...')
         print(data)
 
