@@ -3,13 +3,13 @@ from numba.decorators import jit
 import numpy as np
 
 
-@jit
-def filter_func(filter_flag, filter_z, filter_b, filter_a, data_buffer_all):
-    if filter_flag:
-        data_filtered, filter_z = signal.lfilter(filter_b, filter_a, data_buffer_all, zi=filter_z)
-        return data_filtered, filter_z
-    else:
-        return data_buffer_all, filter_z
+# @jit
+# def filter_func(filter_flag, filter_z, filter_b, filter_a, data_buffer_all):
+#     if filter_flag:
+#         data_filtered, filter_z = signal.lfilter(filter_b, filter_a, data_buffer_all, zi=filter_z)
+#         return data_filtered, filter_z
+#     else:
+#         return data_buffer_all, filter_z
 
 
 class Filtering:
@@ -94,12 +94,18 @@ class Filtering:
         self.low_pass_threshold = lp_thresh / self.nyq
 
     def filter(self, data_buffer_all):
+            if self.filter_flag:
+                self.data_filtered, self.filter_z = signal.lfilter(self.filter_b, self.filter_a, data_buffer_all, zi=self.filter_z)
+                return self.data_filtered
+            else:
+                return data_buffer_all
+
         # self.data_filtered = [[] for __ in range(len(data_buffer_all))]
         # for i, x in enumerate(data_buffer_all):
         #     self.data_filtered[i], self.filter_z = signal.lfilter(self.filter_obj, 1, [x], zi=self.filter_z)
-
-        [self.data_filtered, self.filter_z] = filter_func(self.filter_flag, self.filter_z, self.filter_b, self.filter_a, data_buffer_all)
-        return self.data_filtered
-
         # self.data_filtered = signal.lfilter(self.filter_obj, 1, data_buffer_all, zi=self.filter_z)
+
+        # code for compilation:
+        # [self.data_filtered, self.filter_z] = filter_func(self.filter_flag, self.filter_z, self.filter_b, self.filter_a, data_buffer_all)
+        # return self.data_filtered
 
