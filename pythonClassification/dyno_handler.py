@@ -27,7 +27,6 @@ class DynoHandler(multiprocessing.Process):
 
                 while True:
                     if not self.gui_client_event.is_set():
-                        print('break connection %d...' % self.tcp_ip_dyno.port)
                         break
 
                     dyno_data = client_socket_obj.read([], data_type=self.data_type)[0]
@@ -36,11 +35,11 @@ class DynoHandler(multiprocessing.Process):
 
                         if np.isin(99999, dyno_data):
                             self.dyno_queue.put(dyno_data[:-1])
-                            print('break connection %d...' % self.tcp_ip_dyno.port)
                             break
 
+                        self.dyno_queue.put(dyno_data)
+
                     if self.stop_event.is_set():
-                        print('break connection %d...' % self.tcp_ip_dyno.port)
                         break
 
                 client_socket_obj.close()
