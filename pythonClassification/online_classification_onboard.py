@@ -23,13 +23,15 @@ PARAM.port_sylph = 8888
 PARAM.port_odin = 30000
 PARAM.port_filename = 7777
 PARAM.port_gui = 8000
+PARAM.port_force = 6666
 PARAM.port_dyno = 5555
 PARAM.port_stimulator = 0
 
 PARAM.buffer_size = 25 * 65  # about 50 ms
 PARAM.buffer_size_sending = 2  # buffer size to send data to socket
 PARAM.buffer_filename = 1024
-PARAM.buffer_dyno = 4
+PARAM.buffer_dyno = 1024
+PARAM.buffer_force = 1024
 PARAM.ringbuffer_size = 40960
 PARAM.channel_len = 10
 PARAM.channel_decode = [4, 5, 6, 7]
@@ -51,6 +53,8 @@ PARAM.method_io = 'serial'  # METHOD for output display
 PARAM.method_classify = 'features'  # input 'features' or 'thresholds'
 PARAM.robot_hand_output = '4F'  # input 'PSS' or '4F' or 'combo'
 # THRESHOLDS = np.genfromtxt('thresholds.txt', delimiter=',', defaultfmt='%f')
+PARAM.dyno_data_type = 'single'
+PARAM.force_data_type = 'double'
 
 PARAM.window_class = 0.2  # second
 PARAM.window_overlap = 0.05  # second
@@ -138,10 +142,12 @@ if __name__ == "__main__":
     while True:
         if not pins_obj.pin_off_obj.input_GPIO():
             stop_event = multiprocessing.Event()  # to close all ports and objects in all threads
+            gui_client_event = multiprocessing.Event()  # status if client is connected for data streaming
             raw_buffer_event = multiprocessing.Event()  # for the thread that send data to GUI
             change_parameter_event = multiprocessing.Event()  # change parameter when it receives signal from GUI
 
             stop_event.clear()
+            gui_client_event.set()
             raw_buffer_event.clear()
             change_parameter_event.clear()
 
@@ -158,8 +164,9 @@ if __name__ == "__main__":
             tcp_ip_gui = TcpIp(PARAM.ip_gui, PARAM.port_gui, PARAM.buffer_size_sending)  # create gui socket object
             tcp_ip_filename = TcpIp(PARAM.ip_gui, PARAM.port_filename, PARAM.buffer_filename)  # create socket to receive filename
             tcp_ip_dyno = TcpIp(PARAM.ip_gui, PARAM.port_dyno, PARAM.buffer_dyno)  # create socket to receive dyno data
+            tcp_ip_force = TcpIp(PARAM.ip_gui, PARAM.port_force, PARAM.buffer_force)  # create socket to receive force data
 
-            thread_bypass_data = BypassData(tcp_ip_gui, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, filter_parameters_queue, stop_event)  # send data to GUI in another thread
+            thread_bypass_data = BypassData(tcp_ip_gui, gui_client_event, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, filter_parameters_queue, stop_event)  # send data to GUI in another thread
             thread_bypass_data.start()  # start thread to bypass data to GUI
 
             odin_obj = CommandOdin(tcp_ip_odin)  # create command odin object
@@ -181,9 +188,15 @@ if __name__ == "__main__":
             thread_receive_filename = ReceiveFilename(tcp_ip_filename, stop_event, filename_queue, num_class_value)
             thread_receive_filename.start()
 
-            thread_dyno_handler = DynoHandler(tcp_ip_dyno, dyno_queue, stop_event)
+            print('creating dyno handler with port %d' % PARAM.port_dyno)
+            thread_dyno_handler = DynoHandler(tcp_ip_dyno, dyno_queue, gui_client_event, stop_event, PARAM.dyno_data_type)  # dyno data from Matlab program
             thread_dyno_handler.start()
 
+            print('creating dyno handler with port %d' % PARAM.port_force)
+            thread_force_handler = DynoHandler(tcp_ip_force, dyno_queue, gui_client_event, stop_event, PARAM.force_data_type)  # force sensor data from SylphX program
+            thread_force_handler.start()
+
+            print('finished creating handlers...')
             # saving_obj = Saving()
 
             while True:
@@ -201,12 +214,16 @@ if __name__ == "__main__":
                     # saving_obj.save(data_obj.data_raw, "a")
 
                 if pins_obj.pin_off_obj.input_GPIO():
+                    tcp_ip_dyno.send('99999')
+                    tcp_ip_force.send('99999')
+
                     stop_event.set()  # stop all the other threads
 
                     thread_bypass_data.join()
                     thread_process_classification.join()
                     thread_receive_filename.join()
                     thread_dyno_handler.join()
+                    thread_force_handler.join()
 
                     tcp_ip_sylph.write_disconnect()
                     tcp_ip_odin.write_disconnect()
@@ -216,6 +233,7 @@ if __name__ == "__main__":
                     tcp_ip_gui.close()
                     tcp_ip_filename.close()
                     tcp_ip_dyno.close()
+                    tcp_ip_force.close()
 
                     count = 1
 

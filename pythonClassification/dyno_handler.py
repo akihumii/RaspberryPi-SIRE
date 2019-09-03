@@ -4,11 +4,13 @@ import copy
 
 
 class DynoHandler(multiprocessing.Process):
-    def __init__(self, tcp_ip_dyno, dyno_queue, stop_event):
+    def __init__(self, tcp_ip_dyno, dyno_queue, gui_client_event, stop_event, data_type):
         multiprocessing.Process.__init__(self)
         self.tcp_ip_dyno = tcp_ip_dyno
         self.dyno_queue = dyno_queue
+        self.gui_client_event = gui_client_event
         self.stop_event = stop_event
+        self.data_type = data_type
 
     def run(self):
         print('started dyno handler thread...')
@@ -24,24 +26,30 @@ class DynoHandler(multiprocessing.Process):
                 print('dyno client %s::%d successfully connected...' % (self.tcp_ip_dyno.ip_add, self.tcp_ip_dyno.port))
 
                 while True:
-                    dyno_data = client_socket_obj.read([], data_type='double')[0]
-                    if len(dyno_data) > 0:
-                        # print(dyno_data)
+                    if not self.gui_client_event.is_set():
+                        print('break connection %d...' % self.tcp_ip_dyno.port)
+                        break
 
-                        if int(dyno_data) == 99999:
+                    dyno_data = client_socket_obj.read([], data_type=self.data_type)[0]
+                    if not np.any(np.isnan(dyno_data)) and len(dyno_data) > 0:
+                        print(dyno_data)
+
+                        if np.isin(99999, dyno_data):
+                            self.dyno_queue.put(dyno_data[:-1])
+                            print('break connection %d...' % self.tcp_ip_dyno.port)
                             break
 
-                        self.dyno_queue.put(dyno_data)
-
                     if self.stop_event.is_set():
+                        print('break connection %d...' % self.tcp_ip_dyno.port)
                         break
 
                 client_socket_obj.close()
-                count = 0
+                self.gui_client_event.set()
+                # count = 0
 
             # count += 1
 
             if self.stop_event.is_set():
                 break
 
-        print('thread to recevie dyno data has stopped...')
+        print('thread to recevie dyno data %d has stopped...' % self.tcp_ip_dyno.port)

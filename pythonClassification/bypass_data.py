@@ -4,9 +4,10 @@ import copy
 
 
 class BypassData(multiprocessing.Process):
-    def __init__(self, tcp_ip_obj, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, filter_parameters_queue, stop_event):
+    def __init__(self, tcp_ip_obj, gui_client_event, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, filter_parameters_queue, stop_event):
         multiprocessing.Process.__init__(self)
         self.tcp_ip_obj = tcp_ip_obj
+        self.gui_client_event = gui_client_event
         self.raw_buffer_event = raw_buffer_event
         self.raw_buffer_queue = raw_buffer_queue
         self.filter_parameters_queue = filter_parameters_queue
@@ -80,6 +81,7 @@ class BypassData(multiprocessing.Process):
                 self.raw_buffer_event.clear()  # stop inserting buffer
 
                 count = 0
+                self.gui_client_event.clear()
 
             count += 1
 

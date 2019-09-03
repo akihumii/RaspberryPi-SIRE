@@ -162,11 +162,13 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
 
         print('started classification thread...')
         while True:
+            self.check_change_parameter()
             if not self.ring_queue.empty():
                 self.data = self.ring_queue.get()
                 break
 
         while True:
+            self.check_change_parameter()
             if not self.ring_queue.empty():
                 if np.size(self.data, 0) > self._get_window_class_sample_len():
                     self.data = self.data[-self._get_window_class_sample_len():, :]
