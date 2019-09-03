@@ -1,7 +1,7 @@
 import numpy as np
 import multiprocessing
 import copy
-
+import time
 
 class BypassData(multiprocessing.Process):
     def __init__(self, tcp_ip_obj, gui_client_event, raw_buffer_event, raw_buffer_queue, change_parameter_queue, change_parameter_event, filter_parameters_queue, stop_event):
@@ -84,6 +84,9 @@ class BypassData(multiprocessing.Process):
                 self.gui_client_event.clear()
 
             count += 1
+
+            time.sleep(1)
+            self.gui_client_event.set()
 
             if self.stop_event.is_set():
                 break

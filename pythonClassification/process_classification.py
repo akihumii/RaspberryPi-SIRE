@@ -328,11 +328,12 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
                 temp_array.extend(self.dyno_queue.get())
                 if self.dyno_queue.empty():
                     break
-            temp_locs = range(0, self.size_temp, int(np.ceil(np.float(self.size_temp)/len(temp_array))))
-            for i in range(len(temp_locs)-1):
-                command_array[temp_locs[i]:temp_locs[i+1], 18] = temp_array[i]
-            command_array[temp_locs[-1]:, 18] = temp_array[-1]
-            self.dyno_temp = temp_array[-1]
+            if temp_array:
+                temp_locs = range(0, self.size_temp, int(np.ceil(np.float(self.size_temp)/len(temp_array))))
+                for i in range(len(temp_locs)-1):
+                    command_array[temp_locs[i]:temp_locs[i+1], 18] = temp_array[i]
+                command_array[temp_locs[-1]:, 18] = temp_array[-1]
+                self.dyno_temp = temp_array[-1]
         else:
             command_array[:, 18] = self.dyno_temp
 

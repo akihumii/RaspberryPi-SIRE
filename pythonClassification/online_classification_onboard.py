@@ -224,6 +224,7 @@ if __name__ == "__main__":
                     thread_receive_filename.join()
                     thread_dyno_handler.join()
                     thread_force_handler.join()
+                    print('force handler joined...')
 
                     tcp_ip_sylph.write_disconnect()
                     tcp_ip_odin.write_disconnect()
@@ -232,8 +233,11 @@ if __name__ == "__main__":
                     tcp_ip_sylph.close()
                     tcp_ip_gui.close()
                     tcp_ip_filename.close()
+                    print('closing dyno...')
                     tcp_ip_dyno.close()
+                    print('closing force...')
                     tcp_ip_force.close()
+                    print('finished closing force...')
 
                     count = 1
 

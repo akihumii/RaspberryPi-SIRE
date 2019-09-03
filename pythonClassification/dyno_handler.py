@@ -13,7 +13,7 @@ class DynoHandler(multiprocessing.Process):
         self.data_type = data_type
 
     def run(self):
-        print('started dyno handler thread...')
+        print('started dyno handler thread %d...' % self.tcp_ip_dyno.port)
         # count = 1
         while True:
             client_socket = self.tcp_ip_dyno.create_host()
@@ -27,20 +27,22 @@ class DynoHandler(multiprocessing.Process):
 
                 while True:
                     if not self.gui_client_event.is_set():
+                        print('gui client not set %d...' % self.tcp_ip_dyno.port)
+                        break
+
+                    if self.stop_event.is_set():
                         break
 
                     dyno_data = client_socket_obj.read([], data_type=self.data_type)[0]
                     if not np.any(np.isnan(dyno_data)) and len(dyno_data) > 0:
-                        print(dyno_data)
+                        # print(dyno_data)
 
                         if np.isin(99999, dyno_data):
                             self.dyno_queue.put(dyno_data[:-1])
+                            print('received 99999 %d' % self.tcp_ip_dyno.port)
                             break
 
                         self.dyno_queue.put(dyno_data)
-
-                    if self.stop_event.is_set():
-                        break
 
                 client_socket_obj.close()
                 self.gui_client_event.set()
