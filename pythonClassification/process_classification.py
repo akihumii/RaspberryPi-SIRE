@@ -161,14 +161,16 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
         self.load_classifier()  # load classifier
 
         print('started classification thread...')
-        while True:
+        while True:  # loop until ring_queue is not empty
             self.check_change_parameter()
+            self.check_filename()
             if not self.ring_queue.empty():
                 self.data = self.ring_queue.get()
                 break
 
-        while True:
+        while True:  # loop unitl data size reach a certain length
             self.check_change_parameter()
+            self.check_filename()
             if not self.ring_queue.empty():
                 if np.size(self.data, 0) > self._get_window_class_sample_len():
                     self.data = self.data[-self._get_window_class_sample_len():, :]
@@ -801,7 +803,7 @@ class ProcessClassification(multiprocessing.Process, ClassificationDecision):
             if filename == 'DISCARDFILE!!!':
                 os.remove(self.saving_file.saving_full_filename)
                 print("removed %s..." + self.saving_file.saving_full_filename)
-            elif filename == 'GIMMENUMCLASS!!!':
+            elif filename == 'GIMMENUMCLASS!!!':  # triggered when the "update movement" button is pressed
                 self.load_classifier()
                 self.num_class_value.value = self.num_class
             else:
