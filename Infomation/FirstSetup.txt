@@ -8,6 +8,7 @@ to reload the keymap.
 
 Connect to wifi:
 
+//Skipped
 Soft-blocking
 The output to sudo rfkill list shows that your network card is "soft-blocked".
 
@@ -23,10 +24,18 @@ rerun sudo lshw -class network - you should now see that the kernel has recognis
 
 If the wireless kernel module has been recognised (it should not say "unclaimed"), Network Manager should now be able to see wireless networks that are available in your vacinity.
 https://www.raspberrypi.org/documentation/configuration/wireless/wireless-cli.md
+//
 
 sudo su
+wpa_passphrase "YESSAH" "password" >> /etc/wpa_supplicant/wpa_supplicant.conf
 wpa_passphrase "ShihChiangDesktop" "liushihchiang" >> /etc/wpa_supplicant/wpa_supplicant.conf
+wpa_passphrase "Odin AP" "password" >> /etc/wpa_supplicant/wpa_supplicant.conf
 wpa_passphrase "NUS_2-4GHz" "password" >> /etc/wpa_supplicant/wpa_supplicant.conf
+
+
+Enable SSH:
+sudo raspi-config
+Interfacing Options -> P2 SSH -> Yes
 
 sudo apt-get update
 sudo apt-get dist-upgrade
@@ -40,27 +49,29 @@ sudo apt-get install vim
 sudo apt-get install git
 sudo apt-get install bc
 
-Enable SSH:
-sudo raspi-config
-
+//Skipped half and did half
 Configure RPi to Access Point mode:
 https://github.com/SurferTim/documentation/blob/6bc583965254fa292a470990c40b145f553f6b34/configuration/wireless/access-point.md
 	*TAKE NOTE*: REMOVE driver=nl80211 from /etc/hostapd/hostapd.conf
+//
 
-
+//Skipped
 Remove disk checking feature (speed up boot up time): https://www.raspberrypi.org/forums/viewtopic.php?t=61821&p=459652
 	Edit your /etc/fstab and set any file systems you don't want checked to have a 0 in the 6th (last) field.
+//
 
 Configure UART:
 https://raspberrypi.stackexchange.com/questions/45570/how-do-i-make-serial-work-on-the-raspberry-pi3/45571#45571
 
-
+//Skipped
 Compiling MAX3107 driver: https://gist.github.com/fenrir-naru/95669cb8fcbf14c22e59#file-gistfile1-sh-l12
 https://github.com/notro/rpi-source/wiki/Examples-on-how-to-build-various-modules#hello-world-example
+//
 
 Install rpi-source:
 https://github.com/notro/rpi-source/wiki
 
+//Skipped
 Get max310x.c from: https://github.com/torvalds/linux/blob/master/drivers/tty/serial/max310x.c
 
 Write a makefile:
@@ -80,6 +91,7 @@ interface wlan0
 static ip_address=192.168.137.74/24
 static routers=192.168.137.1
 static domain_name_servers=192.168.137.1
+//
 
 Disable BT:
 https://scribles.net/disabling-bluetooth-on-raspberry-pi/
@@ -101,3 +113,64 @@ The steps below shows how to disable on-board Bluetooth and related services. Th
 Even after disabling on-board Bluetooth and related services, Bluetooth will be available when a Bluetooth adapter is plugged in.
 
 Note: change the arm_freq to 1400, arm_freq_min=100, and temp_soft_limit=70 in /boot/config.txt
+
+Create folders on home directory:
+mkdir Data
+mkdir Python
+mkdir SylphX
+Copy all the files in 'RaspberryPi-SIRE\sylphXCommon' to '/home/pi/SylphX/'.
+Run make file by typing: make
+
+For running sylphx at the startup
+Automatic launch program: 
+sudo vim /lib/systemd/system/[program-name].service
+Type the following into the file:
+[Unit]
+Description=[program-name] startup
+After=multi-user.target
+
+[Service]
+ExecStart=/home/pi/[program-destination]
+
+[Install]
+WantedBy=multi-user.target
+
+Type the following command to activate the service
+
+	sudo systemctl daemon-reload
+	sudo systemctl enable [program-name].service
+	sudo systemctl start [program-name].service
+	sudo reboot
+
+Install Berryconda:
+https://github.com/jjhelmus/berryconda
+**Note** needs to reboot or do
+source .bashrc
+to change the default python directory
+
+Install Python packages
+conda install -c anaconda numpy
+conda install -c poppy-project rpi.gpio 
+conda install -c anaconda scipy 
+conda install -c numba numba
+conda install -c anaconda pyserial 
+conda install -c anaconda scikit-learn 
+conda install -c conda-forge matplotlib 
+
+copy everything in 'RaspberryPi-SIRE\pythonCommon' to Python home directory
+type the following:
+chmod +x deletePythonScripts.sh
+chmod +x runPython.sh
+
+Autologin to Rpi:
+Create 'authorized_keys' file in raspberryPi .ssh/ directory:
+Paste your public key of your remote machine.
+To generate public key and setup for passwordless login, on the remote machine side, please refer to:
+https://www.ssh.com/ssh/putty/windows/puttygen
+Paste the public key in '/.ssh/authorized_keys' file. Add the word 'ssh-rsa ' in front of your public key. 
+Make sure that all the words in your public key are in one sentence.
+
+Update Codes:
+run './deletePythonScripts.sh' to delete old files in raspberry pi
+run: 'RaspberryPi-SIRE\updateRpiPythonScript.m' to transfer files into raspberry pi.
+run './runPython.sh' to run the python code.
