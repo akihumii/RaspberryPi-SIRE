@@ -14,15 +14,15 @@ class Features:
             self.run_list = range(1, 9)
 
         if np.isin(1, self.run_list):
-            output = np.append(output, self.get_min_value())
-        if np.isin(2, self.run_list):
             output = np.append(output, self.get_max_value())
+        if np.isin(2, self.run_list):
+            output = np.append(output, self.get_min_value())
         if np.isin(3, self.run_list):
-            output = np.append(output, self.get_mean_value())
-        if np.isin(4, self.run_list):
             output = np.append(output, self.get_burst_len())
-        if np.isin(5, self.run_list):
+        if np.isin(4, self.run_list):
             output = np.append(output, self.get_area_under_curve())
+        if np.isin(5, self.run_list):
+            output = np.append(output, self.get_mean_value())
         if np.isin(6, self.run_list):
             output = np.append(output, self.get_sum_diff())
         if np.isin(7, self.run_list):
